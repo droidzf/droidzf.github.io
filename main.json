@@ -4,6 +4,7 @@
             "key": "csp_Dy555",
             "name": "三五",
             "type": 3,
+             "api": "csp_Dy555",
             "searchable": 1,
             "quickSearch": 1,
             "filterable": 1,
