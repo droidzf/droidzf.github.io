@@ -11,7 +11,7 @@
             "ext": "https://www.555dyy1.com"
         }
     ],
-"spider":"https://ghproxy.com/https://raw.githubusercontent.com/droidzf/droidzf.github.io/main/main.jar;md5;C295B1D318ADEE41AA3912711B668C29",
+"spider":"https://ghproxy.com/https://raw.githubusercontent.com/droidzf/droidzf.github.io/main/main.jar",
     "parses": [
         {
             "name": "解析聚合",
