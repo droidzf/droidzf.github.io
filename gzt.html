@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工资条</title>
+    <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
+    <script src="https://unpkg.com/xlsx/dist/xlsx.core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.1/papaparse.min.js"></script>
+    <style>
+        #drop-area {
+            border: 2px dashed #ccc;
+            border-radius: 20px;
+            width: 80%;
+            margin: 20px auto;
+            padding: 20px;
+            text-align: center;
+            font-size: 16px;
+            color: #ccc;
+        }
+
+        #table-container table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        #table-container th, #table-container td {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+
+        #table-container th {
+            background-color: #f2f2f2;
+            text-align: left;
+        }
+
+        .action-buttons {
+            margin: 10px 0;
+        }
+
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div id="drop-area">拖拽文件到这里或点击上传</div>
+    <input type="file" id="fileInput" accept=".xlsx, .xls" style="display:none"/>
+    <div class="action-buttons">
+        <button id="generate-images" class="el-button el-button--primary">生成工资条</button>
+    </div>
+    <div id="table-container"></div>
+    <div id="toast-container"></div>
+</div>
+<script>
+    const dropArea = document.getElementById('drop-area');
+    const fileInput = document.getElementById('fileInput');
+    const generateImagesButton = document.getElementById('generate-images');
+    const toastContainer = document.getElementById('toast-container');
+    dropArea.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        dropArea.style.borderColor = '#aaa';
+    });
+    dropArea.addEventListener('dragleave', () => {
+        dropArea.style.borderColor = '#ccc';
+    });
+    dropArea.addEventListener('drop', (event) => {
+        event.preventDefault();
+        dropArea.style.borderColor = '#ccc';
+        const files = event.dataTransfer.files;
+        handleFile(files[0]);
+    });
+    dropArea.addEventListener('click', () => {
+        fileInput.click();
+    });
+    fileInput.addEventListener('change', (event) => {
+        const files = event.target.files;
+        handleFile(files[0]);
+    });
+
+    function handleFile(file) {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, {type: 'array'});
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const json = XLSX.utils.sheet_to_json(worksheet);
+            var tmp = {...json[0], ...json[1]}
+            json.splice(0, 2);
+            json.unshift(tmp)
+            json.splice(json.length - 2);
+            renderTable(json);
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    function renderTable(data) {
+        const container = document.getElementById('table-container');
+        container.innerHTML = '';
+        const table = document.createElement('table');
+        table.className = 'el-table__body';
+        const thead = document.createElement('thead');
+        const tbody = document.createElement('tbody');
+        const headers = Object.keys(data[0]);
+        const headerRow = document.createElement('tr');
+        headers.forEach(header => {
+            const th = document.createElement('th');
+            th.innerText = data[0][header];
+            headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+        data.splice(0, 1);
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+            headers.forEach(header => {
+                const td = document.createElement('td');
+                td.innerText = row[header] || '';
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        container.appendChild(table);
+        adjustTableWidth(table);
+    }
+
+    function adjustTableWidth(table) {
+        const cols = table.querySelectorAll('th');
+        const tbodyRows = table.querySelectorAll('tbody tr');
+        cols.forEach((col, index) => {
+            let maxWidth = 100;
+            tbodyRows.forEach(row => {
+                const cell = row.cells[index];
+                if (cell.offsetWidth > maxWidth) {
+                    maxWidth = cell.offsetWidth;
+                }
+            });
+            col.style.width = `${maxWidth}px`;
+        });
+    }
+
+    generateImagesButton.addEventListener('click', () => {
+        var rows = document.querySelectorAll('#table-container tbody tr');
+        var heads = document.querySelectorAll('#table-container thead tr');
+        var csvData = [];
+        var obj = {}
+        const head = heads[0].innerText.replaceAll('\t', ',')
+        const header = heads[0].innerText.split('\t')
+        rows.forEach((row, index) => {
+            csvData.push(head);
+            var cells = Array.from(row.querySelectorAll('td'));
+            csvData.push(cells.map(cell => cell.innerText).join(','));
+            var csvContent = csvData.join('\n');
+            var filename = `${cells[1].innerText}_${cells[2].innerText}.csv`;
+            obj[filename] = csvContent
+            csvData = [];
+        });
+        generateCSVFilesAndZip(obj, "工资条.zip");
+    });
+
+    function generateCSVFilesAndZip(obj, fileName) {
+        // 创建JSZip实例
+        let zip = new JSZip();
+        let csvContent = '';
+        for (let key in obj) {
+            // 使用Papa.parse将CSV内容转换为二进制字符串
+            let csvBlob = new Blob([obj[key]], {type: 'text/csv;charset=utf-8;'});
+            // 将二进制字符串添加到ZIP文件
+            zip.file(key, csvBlob);
+        }
+        // 创建并下载ZIP文件
+        zip.generateAsync({type: "blob"}).then(function (content) {
+            // 使用Blob和createObjectURL创建一个指向ZIP文件的URL
+            let url = URL.createObjectURL(content);
+            // 创建一个a标签用于下载ZIP文件
+            let downloadLink = document.createElement("a");
+            downloadLink.href = url;
+            downloadLink.download = fileName;
+            document.body.appendChild(downloadLink);
+            // 触发下载
+            downloadLink.click();
+            // 清理并释放资源
+            document.body.removeChild(downloadLink);
+            URL.revokeObjectURL(url);
+        });
+    }
+
+    function showToast(message) {
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.innerText = message;
+        toastContainer.appendChild(toast);
+        setTimeout(() => {
+            toast.classList.add('show');
+        }, 100);
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => {
+                toastContainer.removeChild(toast);
+            }, 500);
+        }, 3000);
+    }
+</script>
+</body>
+</html>
