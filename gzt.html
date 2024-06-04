@@ -172,7 +172,7 @@
         let csvContent = '';
         for (let key in obj) {
             // 使用Papa.parse将CSV内容转换为二进制字符串
-            let csvBlob = new Blob([obj[key]], {type: 'text/csv;charset=utf-8;'});
+            let csvBlob = new Blob(["\ufeff",obj[key]], {type: 'text/csv'});
             // 将二进制字符串添加到ZIP文件
             zip.file(key, csvBlob);
         }
