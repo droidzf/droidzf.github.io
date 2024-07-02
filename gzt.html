@@ -122,7 +122,12 @@
             const tr = document.createElement('tr');
             headers.forEach(header => {
                 const td = document.createElement('td');
-                td.innerText = row[header] || '';
+                if(row[header] && typeof row[header] == 'number' && row[header]%1!==0)
+                    td.innerText= row[header].toFixed(2)
+                else if(row[header] === 0)
+                    td.innerText = row[header]
+                else
+                    td.innerText = row[header] || ''
                 tr.appendChild(td);
             });
             tbody.appendChild(tr);
