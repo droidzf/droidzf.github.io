@@ -20,6 +20,30 @@
       "name": "QQ音乐",
       "url": "https://droidzf.github.io/musicfree/qq.js",
       "version": "1.0.0"
+    },
+    {
+      "name": "元力qq",               "url":"https://13413.kstore.vip/yuanli/qq.js",
+      "version":"1.0.0"
+    },
+    {
+      "name": "元力酷狗kg",
+"url":"https://13413.kstore.vip/yuanli/kg.js",
+      "version": "1.0.0"
+    },
+    {
+      "name": "元力网易wy",
+"url":"https://13413.kstore.vip/wy.js",
+      "version": "1.0.0"
+    },
+    {
+      "name": "元力酷我kw",
+"url":"https://13413.kstore.vip/kw.js",   
+      "version": "1.0.0"
+    },
+    {
+      "name": "元力咪咕mg",
+"url":"http://music.haitangw.net/cqapi/xiaomi.js",
+      "version": "1.0.0"
     }
   ]
 }
