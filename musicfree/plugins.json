@@ -1,6 +1,16 @@
 {
   "desc": "MusicFree 音乐插件订阅",
   "plugins": [
+   {
+      "name": "QQ音乐",
+      "url": "https://droidzf.github.io/musicfree/qq.js",
+      "version": "1.0.0"
+    }, 
+    {
+      "name": "网易云音乐",
+      "url": "https://droidzf.github.io/musicfree/netease.js",
+      "version": "1.0.0"
+    },
     {
       "name": "酷我音乐",
       "url": "https://droidzf.github.io/musicfree/kuwo.js",
@@ -12,37 +22,23 @@
       "version": "1.0.0"
     },
     {
-      "name": "网易云音乐",
-      "url": "https://droidzf.github.io/musicfree/netease.js",
-      "version": "1.0.0"
-    },
-    {
-      "name": "QQ音乐",
-      "url": "https://droidzf.github.io/musicfree/qq.js",
-      "version": "1.0.0"
-    },
-    {
-      "name": "元力qq",               "url":"https://13413.kstore.vip/yuanli/qq.js",
+      "name": "元力qq",
+      "url": "https://13413.kstore.vip/yuanli/qq.js",
       "version":"1.0.0"
     },
     {
       "name": "元力酷狗kg",
-"url":"https://13413.kstore.vip/yuanli/kg.js",
+      "url": "https://13413.kstore.vip/yuanli/kg.js",
       "version": "1.0.0"
     },
     {
       "name": "元力网易wy",
-"url":"https://13413.kstore.vip/wy.js",
+      "url": "https://13413.kstore.vip/yuanli/wy.js",
       "version": "1.0.0"
     },
     {
       "name": "元力酷我kw",
-"url":"https://13413.kstore.vip/kw.js",   
-      "version": "1.0.0"
-    },
-    {
-      "name": "元力咪咕mg",
-"url":"http://music.haitangw.net/cqapi/xiaomi.js",
+      "url": "https://13413.kstore.vip/yuanli/kw.js",   
       "version": "1.0.0"
     }
   ]
