@@ -1,0 +1,25 @@
+{
+  "desc": "MusicFree 音乐插件订阅",
+  "plugins": [
+    {
+      "name": "酷我音乐",
+      "url": "https://droidzf.github.io/musicfree/kuwo.js",
+      "version": "1.0.0"
+    },
+    {
+      "name": "酷狗音乐",
+      "url": "https://droidzf.github.io/musicfree/kugou.js",
+      "version": "1.0.0"
+    },
+    {
+      "name": "网易云音乐",
+      "url": "https://droidzf.github.io/musicfree/netease.js",
+      "version": "1.0.0"
+    },
+    {
+      "name": "QQ音乐",
+      "url": "https://droidzf.github.io/musicfree/qq.js",
+      "version": "1.0.0"
+    }
+  ]
+}
