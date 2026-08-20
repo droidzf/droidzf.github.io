@@ -163,6 +163,7 @@ var {
   getComments,
   extractNumericId
 } = require_shared();
+var cheerio = require("cheerio");
 var KUWO_SECRET_COOKIE = "Hm_Iuvt_cdb524f42f23cer9b268564v7y735ewrq2324";
 var KUWO_SECRET_TOKEN = "MusicFreeOfficialDataClient";
 function createKuwoSecret(token, key) {
@@ -199,6 +200,183 @@ function kuwoWebHeaders() {
     Cookie: KUWO_SECRET_COOKIE + "=" + KUWO_SECRET_TOKEN,
     Referer: "https://www.kuwo.cn/playlists",
     "User-Agent": UA
+  };
+}
+var playlistPageCache;
+var playlistPageCacheAt = 0;
+function createNuxtValueParser(source, variables) {
+  let index = 0;
+  function skipWhitespace() {
+    while (/\s/.test(source.charAt(index))) index += 1;
+  }
+  function parseString() {
+    const start = index;
+    index += 1;
+    while (index < source.length) {
+      if (source.charAt(index) === "\\") {
+        index += 2;
+        continue;
+      }
+      if (source.charAt(index) === '"') {
+        index += 1;
+        return JSON.parse(source.slice(start, index));
+      }
+      index += 1;
+    }
+    throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u5B57\u7B26\u4E32\u89E3\u6790\u5931\u8D25");
+  }
+  function parseIdentifier() {
+    const start = index;
+    while (/[A-Za-z0-9_$]/.test(source.charAt(index))) index += 1;
+    return source.slice(start, index);
+  }
+  function parseNumber() {
+    const start = index;
+    while (/[0-9eE+\-.]/.test(source.charAt(index))) index += 1;
+    const value = Number(source.slice(start, index));
+    if (!Number.isFinite(value)) throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u6570\u5B57\u89E3\u6790\u5931\u8D25");
+    return value;
+  }
+  function parseArray() {
+    const result = [];
+    index += 1;
+    skipWhitespace();
+    if (source.charAt(index) === "]") {
+      index += 1;
+      return result;
+    }
+    while (index < source.length) {
+      result.push(parseValue());
+      skipWhitespace();
+      if (source.charAt(index) === "]") {
+        index += 1;
+        return result;
+      }
+      if (source.charAt(index) !== ",") throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u6570\u7EC4\u89E3\u6790\u5931\u8D25");
+      index += 1;
+    }
+    throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u6570\u7EC4\u672A\u95ED\u5408");
+  }
+  function parseObject() {
+    const result = {};
+    index += 1;
+    skipWhitespace();
+    if (source.charAt(index) === "}") {
+      index += 1;
+      return result;
+    }
+    while (index < source.length) {
+      skipWhitespace();
+      const key = source.charAt(index) === '"' ? parseString() : parseIdentifier();
+      skipWhitespace();
+      if (!key || source.charAt(index) !== ":") {
+        throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u5BF9\u8C61\u89E3\u6790\u5931\u8D25");
+      }
+      index += 1;
+      result[key] = parseValue();
+      skipWhitespace();
+      if (source.charAt(index) === "}") {
+        index += 1;
+        return result;
+      }
+      if (source.charAt(index) !== ",") throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u5BF9\u8C61\u89E3\u6790\u5931\u8D25");
+      index += 1;
+    }
+    throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u5BF9\u8C61\u672A\u95ED\u5408");
+  }
+  function parseValue() {
+    skipWhitespace();
+    const current = source.charAt(index);
+    if (current === '"') return parseString();
+    if (current === "[") return parseArray();
+    if (current === "{") return parseObject();
+    if (current === "-" || /[0-9]/.test(current)) return parseNumber();
+    const identifier = parseIdentifier();
+    if (identifier === "true") return true;
+    if (identifier === "false") return false;
+    if (identifier === "null") return null;
+    if (Object.prototype.hasOwnProperty.call(variables, identifier)) {
+      return variables[identifier];
+    }
+    throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u5305\u542B\u672A\u77E5\u53D8\u91CF: " + identifier);
+  }
+  return function(start) {
+    index = start;
+    const value = parseValue();
+    return { value, end: index };
+  };
+}
+function parseKuwoPlaylistPage(rawHtml) {
+  const $ = cheerio.load(text(rawHtml));
+  let script = "";
+  $("script").each(function() {
+    const content = $(this).html() || "";
+    if (!script && content.indexOf("window.__NUXT__=") >= 0) script = content;
+  });
+  if (!script) throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u7F3A\u5C11\u5B98\u65B9\u6570\u636E");
+  const functionMatch = /window\.__NUXT__=\(function\(([^)]*)\)\{return\s*/.exec(script);
+  const invocationIndex = script.lastIndexOf("}(");
+  const argumentsEnd = script.lastIndexOf("));");
+  if (!functionMatch || invocationIndex < 0 || argumentsEnd <= invocationIndex) {
+    throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u683C\u5F0F\u5DF2\u53D8\u5316");
+  }
+  const parameterNames = functionMatch[1].split(",").filter(Boolean);
+  const argumentValues = JSON.parse(
+    "[" + script.slice(invocationIndex + 2, argumentsEnd) + "]"
+  );
+  const variables = {};
+  parameterNames.forEach(function(name, parameterIndex) {
+    variables[name] = argumentValues[parameterIndex];
+  });
+  const parseAt = createNuxtValueParser(script, variables);
+  const playListMarker = "playList:";
+  const playListIndex = script.indexOf(playListMarker, functionMatch.index);
+  if (playListIndex < 0) throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u7F3A\u5C11\u63A8\u8350\u5217\u8868");
+  const playListResult = parseAt(playListIndex + playListMarker.length);
+  const totalMarker = ",total:";
+  const totalIndex = script.indexOf(totalMarker, playListResult.end);
+  const totalResult = totalIndex < 0 ? { value: 0 } : parseAt(totalIndex + totalMarker.length);
+  const tagListMarker = "tagList:";
+  const tagListIndex = script.indexOf(tagListMarker, playListResult.end);
+  if (tagListIndex < 0) throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u7F3A\u5C11\u5206\u7C7B\u6807\u7B7E");
+  const tagListResult = parseAt(tagListIndex + tagListMarker.length);
+  return {
+    playList: Array.isArray(playListResult.value) ? playListResult.value : [],
+    total: Number(totalResult.value) || 0,
+    tagList: Array.isArray(tagListResult.value) ? tagListResult.value : []
+  };
+}
+async function getKuwoPlaylistPageData() {
+  const now = Date.now();
+  if (playlistPageCache && now - playlistPageCacheAt < 5 * 60 * 1e3) {
+    return playlistPageCache;
+  }
+  const response = await axios.get("https://www.kuwo.cn/playlists", {
+    headers: {
+      Accept: "text/html,application/xhtml+xml",
+      Referer: "https://www.kuwo.cn/",
+      "User-Agent": UA
+    },
+    responseType: "text",
+    timeout: 8e3
+  });
+  const parsed = parseKuwoPlaylistPage(response.data);
+  if (!parsed.playList.length || !parsed.tagList.length) {
+    throw new Error("\u9177\u6211\u5B98\u65B9\u63A8\u8350\u6B4C\u5355\u4E3A\u7A7A");
+  }
+  playlistPageCache = parsed;
+  playlistPageCacheAt = now;
+  return parsed;
+}
+function mapRecommendSheet(item) {
+  return {
+    id: text(item.id),
+    title: text(item.name),
+    artist: text(item.uname),
+    artwork: toHttps(item.img),
+    description: text(item.desc || item.info),
+    worksNum: Number(item.total) || void 0,
+    playCount: Number(item.listencnt) || void 0
   };
 }
 function artwork(item) {
@@ -324,6 +502,13 @@ async function getTopListDetail(topListItem, page) {
 async function getRecommendSheetsByTag(tag, page) {
   const currentPage = Math.max(1, Number(page) || 1);
   const tagId = text(tag && tag.id, "__recommend__");
+  if (tagId === "__recommend__" && currentPage === 1) {
+    const officialPage = await getKuwoPlaylistPageData();
+    return {
+      isEnd: officialPage.playList.length < 20 || officialPage.playList.length >= officialPage.total,
+      data: officialPage.playList.map(mapRecommendSheet)
+    };
+  }
   const endpoint = tagId === "__recommend__" ? "https://www.kuwo.cn/api/www/classify/playlist/getRcmPlayList" : "https://www.kuwo.cn/api/www/classify/playlist/getTagPlayList";
   const params = { pn: currentPage, rn: 20, httpsStatus: 1, plat: "web_www" };
   if (tagId === "__recommend__") params.order = "new";
@@ -337,17 +522,7 @@ async function getRecommendSheetsByTag(tag, page) {
   const list = data.data || [];
   return {
     isEnd: currentPage * 20 >= Number(data.total || 0) || list.length < 20,
-    data: list.map(function(item) {
-      return {
-        id: text(item.id),
-        title: text(item.name),
-        artist: text(item.uname),
-        artwork: toHttps(item.img),
-        description: text(item.desc || item.info),
-        worksNum: Number(item.total) || void 0,
-        playCount: Number(item.listencnt) || void 0
-      };
-    })
+    data: list.map(mapRecommendSheet)
   };
 }
 async function getMusicSheetInfo(sheetItem, page) {
@@ -386,12 +561,8 @@ async function getMusicSheetInfo(sheetItem, page) {
   return result;
 }
 async function getRecommendSheetTags() {
-  const response = await axios.get("https://www.kuwo.cn/api/www/playlist/getTagList", {
-    params: { httpsStatus: 1, plat: "web_www" },
-    headers: kuwoWebHeaders(),
-    timeout: 8e3
-  });
-  const groups = response.data && response.data.data || [];
+  const officialPage = await getKuwoPlaylistPageData();
+  const groups = officialPage.tagList;
   return {
     pinned: [{ id: "__recommend__", title: "\u7CBE\u9009\u6B4C\u5355" }],
     data: groups.filter(function(group) {
@@ -412,7 +583,7 @@ async function importMusicSheet(urlLike) {
 }
 module.exports = {
   platform: "\u9177\u6211\u97F3\u4E50",
-  version: "1.3.0",
+  version: "1.3.1",
   srcUrl: "https://droidzf.github.io/musicfree/kuwo.js",
   author: "zero",
   description: "\u72EC\u7ACB\u9177\u6211\u97F3\u4E50\u63D2\u4EF6\uFF1A\u641C\u7D22\u3001\u64AD\u653E\u3001\u6B4C\u8BCD\u3001\u699C\u5355\u3001\u63A8\u8350\u6B4C\u5355\u3001\u6B4C\u5355\u8BE6\u60C5\u548C\u8BC4\u8BBA\u3002",
