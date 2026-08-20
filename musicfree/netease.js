@@ -120,6 +120,22 @@ var require_shared = __commonJS({
       if (!matches || !matches.length) throw new Error("\u65E0\u6CD5\u8BC6\u522B ID");
       return matches[matches.length - 1];
     }
+    function createTopListGroups2(platformKey, groups) {
+      return groups.map(function(group) {
+        return {
+          title: group.title,
+          data: group.data.map(function(item) {
+            return {
+              id: text2(item[0]),
+              bangId: text2(item[0]),
+              title: item[1],
+              description: item[2],
+              artwork: "https://droidzf.github.io/musicfree/covers/" + platformKey + "-" + text2(item[0]) + ".png"
+            };
+          })
+        };
+      });
+    }
     module2.exports = {
       axios: axios2,
       PAGE_SIZE: PAGE_SIZE2,
@@ -133,7 +149,8 @@ var require_shared = __commonJS({
       userVariables: userVariables2,
       resolveMedia: resolveMedia2,
       getComments: getComments2,
-      extractNumericId: extractNumericId2
+      extractNumericId: extractNumericId2,
+      createTopListGroups: createTopListGroups2
     };
   }
 });
@@ -150,22 +167,43 @@ var {
   userVariables,
   resolveMedia,
   getComments,
-  extractNumericId
+  extractNumericId,
+  createTopListGroups
 } = require_shared();
-var TOP_LISTS = [
-  ["19723756", "\u98D9\u5347\u699C"],
-  ["3778678", "\u70ED\u6B4C\u699C"],
-  ["2884035", "\u539F\u521B\u699C"],
-  ["7785066739", "\u9ED1\u80F6VIP\u70ED\u6B4C\u699C"],
-  ["3779629", "\u65B0\u6B4C\u699C"],
-  ["991319590", "\u8BF4\u5531\u699C"],
-  ["71384707", "\u53E4\u5178\u699C"],
-  ["745956260", "\u97E9\u8BED\u699C"],
-  ["5059644681", "\u65E5\u8BED\u699C"],
-  ["5059642708", "\u56FD\u98CE\u699C"],
-  ["6886768100", "\u4E2D\u6587DJ\u699C"],
-  ["6723173524", "\u7F51\u7EDC\u70ED\u6B4C\u699C"],
-  ["8532443277", "\u86CB\u4ED4\u6D3E\u5BF9\u542C\u6B4C\u699C"]
+var TOP_LIST_GROUPS = [
+  {
+    title: "\u5B98\u65B9\u699C",
+    data: [
+      ["19723756", "\u98D9\u5347\u699C", "\u805A\u5408\u7F51\u6613\u4E91\u97F3\u4E50\u8FD1\u671F\u70ED\u5EA6\u5FEB\u901F\u4E0A\u5347\u7684\u6B4C\u66F2\u3002"],
+      ["3778678", "\u70ED\u6B4C\u699C", "\u5448\u73B0\u7F51\u6613\u4E91\u97F3\u4E50\u5F53\u524D\u7EFC\u5408\u70ED\u5EA6\u8F83\u9AD8\u7684\u6B4C\u66F2\u3002"],
+      ["2884035", "\u539F\u521B\u699C", "\u805A\u5408\u7F51\u6613\u4E91\u97F3\u4E50\u5E73\u53F0\u70ED\u95E8\u539F\u521B\u4F5C\u54C1\u3002"],
+      ["3779629", "\u65B0\u6B4C\u699C", "\u6536\u5F55\u8FD1\u671F\u53D1\u5E03\u5E76\u53D7\u5230\u5173\u6CE8\u7684\u65B0\u6B4C\u3002"],
+      ["7785066739", "\u9ED1\u80F6VIP\u70ED\u6B4C\u699C", "\u805A\u5408\u9ED1\u80F6 VIP \u7528\u6237\u5173\u6CE8\u7684\u70ED\u95E8\u6B4C\u66F2\u3002"]
+    ]
+  },
+  {
+    title: "\u66F2\u98CE\u699C",
+    data: [
+      ["991319590", "\u8BF4\u5531\u699C", "\u805A\u5408\u70ED\u95E8\u8BF4\u5531\u4F5C\u54C1\u3002"],
+      ["71384707", "\u53E4\u5178\u699C", "\u805A\u5408\u70ED\u95E8\u53E4\u5178\u97F3\u4E50\u4F5C\u54C1\u3002"],
+      ["5059642708", "\u56FD\u98CE\u699C", "\u805A\u5408\u70ED\u95E8\u56FD\u98CE\u97F3\u4E50\u4F5C\u54C1\u3002"],
+      ["6886768100", "\u4E2D\u6587DJ\u699C", "\u805A\u5408\u70ED\u95E8\u4E2D\u6587 DJ \u4E0E\u821E\u66F2\u4F5C\u54C1\u3002"],
+      ["6723173524", "\u7F51\u7EDC\u70ED\u6B4C\u699C", "\u805A\u5408\u8FD1\u671F\u7F51\u7EDC\u70ED\u95E8\u6B4C\u66F2\u3002"]
+    ]
+  },
+  {
+    title: "\u5730\u533A\u699C",
+    data: [
+      ["745956260", "\u97E9\u8BED\u699C", "\u805A\u5408\u70ED\u95E8\u97E9\u8BED\u6B4C\u66F2\u3002"],
+      ["5059644681", "\u65E5\u8BED\u699C", "\u805A\u5408\u70ED\u95E8\u65E5\u8BED\u6B4C\u66F2\u3002"]
+    ]
+  },
+  {
+    title: "\u7279\u8272\u699C",
+    data: [
+      ["8532443277", "\u86CB\u4ED4\u6D3E\u5BF9\u542C\u6B4C\u699C", "\u805A\u5408\u86CB\u4ED4\u6D3E\u5BF9\u7528\u6237\u5173\u6CE8\u7684\u70ED\u95E8\u6B4C\u66F2\u3002"]
+    ]
+  }
 ];
 var SHEET_TAGS = ["\u534E\u8BED", "\u6D41\u884C", "\u6447\u6EDA", "\u6C11\u8C23", "\u7535\u5B50", "\u8BF4\u5531", "\u8F7B\u97F3\u4E50", "\u5F71\u89C6\u539F\u58F0", "ACG", "\u513F\u7AE5"];
 function mapMusic(item) {
@@ -337,7 +375,7 @@ async function importMusicSheet(urlLike) {
 }
 module.exports = {
   platform: "\u7F51\u6613\u4E91\u97F3\u4E50",
-  version: "1.0.0",
+  version: "1.1.0",
   author: "zero",
   description: "\u72EC\u7ACB\u7F51\u6613\u4E91\u97F3\u4E50\u63D2\u4EF6\uFF1A\u641C\u7D22\u3001\u64AD\u653E\u3001\u6B4C\u8BCD\u3001\u699C\u5355\u3001\u63A8\u8350\u6B4C\u5355\u3001\u5B8C\u6574\u6B4C\u5355\u8BE6\u60C5\u548C\u8BC4\u8BBA\u3002",
   cacheControl: "no-store",
@@ -357,14 +395,7 @@ module.exports = {
   getLyric,
   getMusicInfo,
   getTopLists: function() {
-    return Promise.resolve([
-      {
-        title: "\u7F51\u6613\u4E91\u699C\u5355",
-        data: TOP_LISTS.map(function(item) {
-          return { id: item[0], title: item[1] };
-        })
-      }
-    ]);
+    return Promise.resolve(createTopListGroups("netease", TOP_LIST_GROUPS));
   },
   getTopListDetail: function(topListItem, page) {
     return playlistPage(topListItem, page, "topListItem");

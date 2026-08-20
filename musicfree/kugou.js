@@ -120,6 +120,22 @@ var require_shared = __commonJS({
       if (!matches || !matches.length) throw new Error("\u65E0\u6CD5\u8BC6\u522B ID");
       return matches[matches.length - 1];
     }
+    function createTopListGroups2(platformKey, groups) {
+      return groups.map(function(group) {
+        return {
+          title: group.title,
+          data: group.data.map(function(item) {
+            return {
+              id: text2(item[0]),
+              bangId: text2(item[0]),
+              title: item[1],
+              description: item[2],
+              artwork: "https://droidzf.github.io/musicfree/covers/" + platformKey + "-" + text2(item[0]) + ".png"
+            };
+          })
+        };
+      });
+    }
     module2.exports = {
       axios: axios2,
       PAGE_SIZE: PAGE_SIZE2,
@@ -133,7 +149,8 @@ var require_shared = __commonJS({
       userVariables,
       resolveMedia: resolveMedia2,
       getComments: getComments2,
-      extractNumericId: extractNumericId2
+      extractNumericId: extractNumericId2,
+      createTopListGroups: createTopListGroups2
     };
   }
 });
@@ -148,60 +165,91 @@ var {
   parseDuration,
   resolveMedia,
   getComments,
-  extractNumericId
+  extractNumericId,
+  createTopListGroups
 } = require_shared();
-var TOP_LISTS = [
-  ["8888", "TOP500"],
-  ["6666", "\u98D9\u5347\u699C"],
-  ["59703", "\u8702\u9E1F\u6D41\u884C\u97F3\u4E50\u699C"],
-  ["52144", "\u6296\u97F3\u70ED\u6B4C\u699C"],
-  ["52767", "\u5FEB\u624B\u70ED\u6B4C\u699C"],
-  ["24971", "DJ\u70ED\u6B4C\u699C"],
-  ["23784", "\u7F51\u7EDC\u7EA2\u6B4C\u699C"],
-  ["44412", "\u8BF4\u5531\u5148\u950B\u699C"],
-  ["31308", "\u5185\u5730\u699C"],
-  ["33160", "\u7535\u97F3\u699C"],
-  ["31313", "\u9999\u6E2F\u5730\u533A\u699C"],
-  ["51341", "\u6C11\u8C23\u699C"],
-  ["54848", "\u53F0\u6E7E\u5730\u533A\u699C"],
-  ["31310", "\u6B27\u7F8E\u699C"],
-  ["33162", "ACG\u65B0\u6B4C\u699C"],
-  ["31311", "\u97E9\u56FD\u699C"],
-  ["31312", "\u65E5\u672C\u699C"],
-  ["49225", "80\u540E\u70ED\u6B4C\u699C"],
-  ["49223", "90\u540E\u70ED\u6B4C\u699C"],
-  ["49224", "00\u540E\u70ED\u6B4C\u699C"],
-  ["33165", "\u7CA4\u8BED\u91D1\u66F2\u699C"],
-  ["33166", "\u6B27\u7F8E\u91D1\u66F2\u699C"],
-  ["33163", "\u5F71\u89C6\u91D1\u66F2\u699C"],
-  ["51340", "\u4F24\u611F\u699C"],
-  ["35811", "\u4F1A\u5458\u4E13\u4EAB\u699C"],
-  ["37361", "\u96F7\u8FBE\u699C"],
-  ["21101", "\u5206\u4EAB\u699C"],
-  ["46910", "\u7EFC\u827A\u65B0\u6B4C\u699C"],
-  ["30972", "\u9177\u72D7\u97F3\u4E50\u4EBA\u539F\u521B\u699C"],
-  ["60170", "\u95FD\u5357\u8BED\u699C"],
-  ["65234", "\u513F\u6B4C\u699C"],
-  ["4681", "\u7F8E\u56FDBillBoard\u699C"],
-  ["25028", "Beatport\u7535\u5B50\u821E\u66F2\u699C"],
-  ["4680", "\u82F1\u56FD\u5355\u66F2\u699C"],
-  ["38623", "\u97E9\u56FDMelon\u97F3\u4E50\u699C"],
-  ["42807", "joox\u672C\u5730\u70ED\u6B4C\u699C"],
-  ["36107", "\u5C0F\u8BED\u79CD\u70ED\u6B4C\u699C"],
-  ["4673", "\u65E5\u672C\u516C\u4FE1\u699C"],
-  ["46868", "\u65E5\u672CSPACE SHOWER\u699C"],
-  ["42808", "KKBOX\u98CE\u4E91\u699C"],
-  ["60171", "\u8D8A\u5357\u8BED\u699C"],
-  ["60172", "\u6CF0\u8BED\u699C"],
-  ["59895", "R&B\u699C"],
-  ["59896", "\u6447\u6EDA\u699C"],
-  ["59897", "\u7235\u58EB\u699C"],
-  ["59898", "\u4E61\u6751\u97F3\u4E50\u699C"],
-  ["59900", "\u7EAF\u97F3\u4E50\u699C"],
-  ["59899", "\u53E4\u5178\u699C"],
-  ["22603", "5sing\u97F3\u4E50\u699C"],
-  ["21335", "\u7E41\u661F\u97F3\u4E50\u699C"],
-  ["33161", "\u53E4\u98CE\u65B0\u6B4C\u699C"]
+var TOP_LIST_GROUPS = [
+  {
+    title: "\u5DC5\u5CF0\u699C",
+    data: [
+      ["8888", "TOP500", "\u9177\u72D7\u97F3\u4E50\u7EFC\u5408\u70ED\u5EA6 TOP500\u3002"],
+      ["6666", "\u98D9\u5347\u699C", "\u805A\u5408\u8FD1\u671F\u70ED\u5EA6\u5FEB\u901F\u4E0A\u5347\u7684\u6B4C\u66F2\u3002"],
+      ["59703", "\u8702\u9E1F\u6D41\u884C\u97F3\u4E50\u699C", "\u5448\u73B0\u8702\u9E1F\u97F3\u4E50\u4F53\u7CFB\u4E2D\u7684\u6D41\u884C\u70ED\u6B4C\u3002"],
+      ["52144", "\u6296\u97F3\u70ED\u6B4C\u699C", "\u6536\u5F55\u6296\u97F3\u8FD1\u671F\u70ED\u95E8\u97F3\u4E50\u3002"],
+      ["52767", "\u5FEB\u624B\u70ED\u6B4C\u699C", "\u6536\u5F55\u5FEB\u624B\u8FD1\u671F\u70ED\u95E8\u97F3\u4E50\u3002"]
+    ]
+  },
+  {
+    title: "\u66F2\u98CE\u699C",
+    data: [
+      ["24971", "DJ\u70ED\u6B4C\u699C", "\u805A\u5408\u70ED\u95E8 DJ \u4E0E\u821E\u66F2\u4F5C\u54C1\u3002"],
+      ["23784", "\u7F51\u7EDC\u7EA2\u6B4C\u699C", "\u805A\u5408\u8FD1\u671F\u7F51\u7EDC\u70ED\u95E8\u6B4C\u66F2\u3002"],
+      ["44412", "\u8BF4\u5531\u5148\u950B\u699C", "\u805A\u5408\u70ED\u95E8\u8BF4\u5531\u4E0E\u5148\u950B\u4F5C\u54C1\u3002"],
+      ["33160", "\u7535\u97F3\u699C", "\u805A\u5408\u70ED\u95E8\u7535\u5B50\u97F3\u4E50\u4F5C\u54C1\u3002"],
+      ["51341", "\u6C11\u8C23\u699C", "\u805A\u5408\u70ED\u95E8\u6C11\u8C23\u4F5C\u54C1\u3002"],
+      ["33162", "ACG\u65B0\u6B4C\u699C", "\u6536\u5F55\u8FD1\u671F\u70ED\u95E8 ACG \u65B0\u6B4C\u3002"],
+      ["33165", "\u7CA4\u8BED\u91D1\u66F2\u699C", "\u805A\u5408\u70ED\u95E8\u7CA4\u8BED\u91D1\u66F2\u3002"],
+      ["33166", "\u6B27\u7F8E\u91D1\u66F2\u699C", "\u805A\u5408\u6B27\u7F8E\u7ECF\u5178\u4E0E\u70ED\u95E8\u91D1\u66F2\u3002"],
+      ["33163", "\u5F71\u89C6\u91D1\u66F2\u699C", "\u805A\u5408\u5F71\u89C6\u5267\u4E0E\u7EFC\u827A\u539F\u58F0\u91D1\u66F2\u3002"],
+      ["51340", "\u4F24\u611F\u699C", "\u805A\u5408\u4F24\u611F\u6C1B\u56F4\u70ED\u95E8\u6B4C\u66F2\u3002"],
+      ["59895", "R&B\u699C", "\u805A\u5408\u70ED\u95E8 R&B \u4F5C\u54C1\u3002"],
+      ["59896", "\u6447\u6EDA\u699C", "\u805A\u5408\u70ED\u95E8\u6447\u6EDA\u4F5C\u54C1\u3002"],
+      ["59897", "\u7235\u58EB\u699C", "\u805A\u5408\u70ED\u95E8\u7235\u58EB\u4F5C\u54C1\u3002"],
+      ["59898", "\u4E61\u6751\u97F3\u4E50\u699C", "\u805A\u5408\u70ED\u95E8\u4E61\u6751\u97F3\u4E50\u3002"],
+      ["59900", "\u7EAF\u97F3\u4E50\u699C", "\u805A\u5408\u70ED\u95E8\u7EAF\u97F3\u4E50\u4F5C\u54C1\u3002"],
+      ["59899", "\u53E4\u5178\u699C", "\u805A\u5408\u70ED\u95E8\u53E4\u5178\u97F3\u4E50\u4F5C\u54C1\u3002"],
+      ["33161", "\u53E4\u98CE\u65B0\u6B4C\u699C", "\u6536\u5F55\u8FD1\u671F\u70ED\u95E8\u53E4\u98CE\u65B0\u6B4C\u3002"]
+    ]
+  },
+  {
+    title: "\u5730\u533A\u699C",
+    data: [
+      ["31308", "\u5185\u5730\u699C", "\u805A\u5408\u4E2D\u56FD\u5185\u5730\u70ED\u95E8\u6B4C\u66F2\u3002"],
+      ["31313", "\u9999\u6E2F\u5730\u533A\u699C", "\u805A\u5408\u4E2D\u56FD\u9999\u6E2F\u5730\u533A\u70ED\u95E8\u6B4C\u66F2\u3002"],
+      ["54848", "\u53F0\u6E7E\u5730\u533A\u699C", "\u805A\u5408\u4E2D\u56FD\u53F0\u6E7E\u5730\u533A\u70ED\u95E8\u6B4C\u66F2\u3002"],
+      ["31310", "\u6B27\u7F8E\u699C", "\u805A\u5408\u6B27\u7F8E\u5730\u533A\u70ED\u95E8\u6B4C\u66F2\u3002"],
+      ["31311", "\u97E9\u56FD\u699C", "\u805A\u5408\u97E9\u56FD\u70ED\u95E8\u6B4C\u66F2\u3002"],
+      ["31312", "\u65E5\u672C\u699C", "\u805A\u5408\u65E5\u672C\u70ED\u95E8\u6B4C\u66F2\u3002"],
+      ["60170", "\u95FD\u5357\u8BED\u699C", "\u805A\u5408\u70ED\u95E8\u95FD\u5357\u8BED\u6B4C\u66F2\u3002"],
+      ["36107", "\u5C0F\u8BED\u79CD\u70ED\u6B4C\u699C", "\u805A\u5408\u591A\u8BED\u79CD\u70ED\u95E8\u6B4C\u66F2\u3002"],
+      ["60171", "\u8D8A\u5357\u8BED\u699C", "\u805A\u5408\u70ED\u95E8\u8D8A\u5357\u8BED\u6B4C\u66F2\u3002"],
+      ["60172", "\u6CF0\u8BED\u699C", "\u805A\u5408\u70ED\u95E8\u6CF0\u8BED\u6B4C\u66F2\u3002"]
+    ]
+  },
+  {
+    title: "\u5E74\u4EE3\u699C",
+    data: [
+      ["49225", "80\u540E\u70ED\u6B4C\u699C", "\u805A\u5408\u6DF1\u53D7 80 \u540E\u542C\u4F17\u559C\u7231\u7684\u6B4C\u66F2\u3002"],
+      ["49223", "90\u540E\u70ED\u6B4C\u699C", "\u805A\u5408\u6DF1\u53D7 90 \u540E\u542C\u4F17\u559C\u7231\u7684\u6B4C\u66F2\u3002"],
+      ["49224", "00\u540E\u70ED\u6B4C\u699C", "\u805A\u5408\u6DF1\u53D7 00 \u540E\u542C\u4F17\u559C\u7231\u7684\u6B4C\u66F2\u3002"]
+    ]
+  },
+  {
+    title: "\u7279\u8272\u699C",
+    data: [
+      ["35811", "\u4F1A\u5458\u4E13\u4EAB\u699C", "\u805A\u5408\u9177\u72D7\u4F1A\u5458\u5173\u6CE8\u7684\u70ED\u95E8\u4F5C\u54C1\u3002"],
+      ["37361", "\u96F7\u8FBE\u699C", "\u57FA\u4E8E\u5E73\u53F0\u8D8B\u52BF\u53D1\u73B0\u7684\u6F5C\u529B\u70ED\u6B4C\u3002"],
+      ["21101", "\u5206\u4EAB\u699C", "\u6309\u7528\u6237\u5206\u4EAB\u70ED\u5EA6\u6574\u7406\u7684\u6B4C\u66F2\u3002"],
+      ["46910", "\u7EFC\u827A\u65B0\u6B4C\u699C", "\u6536\u5F55\u8FD1\u671F\u7EFC\u827A\u8282\u76EE\u70ED\u95E8\u65B0\u6B4C\u3002"],
+      ["30972", "\u9177\u72D7\u97F3\u4E50\u4EBA\u539F\u521B\u699C", "\u805A\u5408\u9177\u72D7\u97F3\u4E50\u4EBA\u539F\u521B\u4F5C\u54C1\u3002"],
+      ["65234", "\u513F\u6B4C\u699C", "\u805A\u5408\u70ED\u95E8\u513F\u7AE5\u6B4C\u66F2\u3002"],
+      ["22603", "5sing\u97F3\u4E50\u699C", "\u805A\u5408 5sing \u5E73\u53F0\u70ED\u95E8\u97F3\u4E50\u3002"],
+      ["21335", "\u7E41\u661F\u97F3\u4E50\u699C", "\u805A\u5408\u7E41\u661F\u97F3\u4E50\u70ED\u95E8\u4F5C\u54C1\u3002"]
+    ]
+  },
+  {
+    title: "\u5168\u7403\u699C",
+    data: [
+      ["4681", "\u7F8E\u56FDBillBoard\u699C", "\u6536\u5F55\u7F8E\u56FD Billboard \u70ED\u95E8\u4F5C\u54C1\u3002"],
+      ["25028", "Beatport\u7535\u5B50\u821E\u66F2\u699C", "\u6536\u5F55 Beatport \u70ED\u95E8\u7535\u5B50\u821E\u66F2\u3002"],
+      ["4680", "\u82F1\u56FD\u5355\u66F2\u699C", "\u6536\u5F55\u82F1\u56FD\u70ED\u95E8\u5355\u66F2\u3002"],
+      ["38623", "\u97E9\u56FDMelon\u97F3\u4E50\u699C", "\u6536\u5F55\u97E9\u56FD Melon \u70ED\u95E8\u97F3\u4E50\u3002"],
+      ["42807", "joox\u672C\u5730\u70ED\u6B4C\u699C", "\u6536\u5F55 JOOX \u672C\u5730\u70ED\u95E8\u6B4C\u66F2\u3002"],
+      ["4673", "\u65E5\u672C\u516C\u4FE1\u699C", "\u6536\u5F55\u65E5\u672C\u516C\u4FE1\u699C\u70ED\u95E8\u4F5C\u54C1\u3002"],
+      ["46868", "\u65E5\u672CSPACE SHOWER\u699C", "\u6536\u5F55 SPACE SHOWER \u70ED\u95E8\u4F5C\u54C1\u3002"],
+      ["42808", "KKBOX\u98CE\u4E91\u699C", "\u6536\u5F55 KKBOX \u98CE\u4E91\u70ED\u95E8\u4F5C\u54C1\u3002"]
+    ]
+  }
 ];
 var SHEET_TAGS = [
   ["5", "\u63A8\u8350"],
@@ -402,7 +450,7 @@ async function importMusicSheet(urlLike) {
 }
 module.exports = {
   platform: "\u9177\u72D7\u97F3\u4E50",
-  version: "1.0.0",
+  version: "1.1.0",
   author: "zero",
   description: "\u72EC\u7ACB\u9177\u72D7\u97F3\u4E50\u63D2\u4EF6\uFF1A\u641C\u7D22\u3001\u64AD\u653E\u3001\u6B4C\u8BCD\u300151 \u4E2A\u699C\u5355\u3001\u63A8\u8350\u6B4C\u5355\u3001\u6B4C\u5355\u8BE6\u60C5\u548C\u8BC4\u8BBA\u3002",
   cacheControl: "no-store",
@@ -415,14 +463,7 @@ module.exports = {
   getLyric,
   getMusicInfo,
   getTopLists: function() {
-    return Promise.resolve([
-      {
-        title: "\u9177\u72D7\u699C\u5355",
-        data: TOP_LISTS.map(function(item) {
-          return { id: item[0], bangId: item[0], title: item[1] };
-        })
-      }
-    ]);
+    return Promise.resolve(createTopListGroups("kugou", TOP_LIST_GROUPS));
   },
   getTopListDetail,
   getRecommendSheetTags: function() {

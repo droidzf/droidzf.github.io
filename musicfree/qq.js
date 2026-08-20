@@ -120,6 +120,22 @@ var require_shared = __commonJS({
       if (!matches || !matches.length) throw new Error("\u65E0\u6CD5\u8BC6\u522B ID");
       return matches[matches.length - 1];
     }
+    function createTopListGroups2(platformKey, groups) {
+      return groups.map(function(group) {
+        return {
+          title: group.title,
+          data: group.data.map(function(item) {
+            return {
+              id: text2(item[0]),
+              bangId: text2(item[0]),
+              title: item[1],
+              description: item[2],
+              artwork: "https://droidzf.github.io/musicfree/covers/" + platformKey + "-" + text2(item[0]) + ".png"
+            };
+          })
+        };
+      });
+    }
     module2.exports = {
       axios: axios2,
       PAGE_SIZE: PAGE_SIZE2,
@@ -133,7 +149,8 @@ var require_shared = __commonJS({
       userVariables,
       resolveMedia: resolveMedia2,
       getComments: getComments2,
-      extractNumericId: extractNumericId2
+      extractNumericId: extractNumericId2,
+      createTopListGroups: createTopListGroups2
     };
   }
 });
@@ -150,31 +167,52 @@ var {
   decodeBase64,
   resolveMedia,
   getComments,
-  extractNumericId
+  extractNumericId,
+  createTopListGroups
 } = require_shared();
-var TOP_LISTS = [
-  ["4", "\u6D41\u884C\u6307\u6570\u699C"],
-  ["26", "\u70ED\u6B4C\u699C"],
-  ["27", "\u65B0\u6B4C\u699C"],
-  ["62", "\u98D9\u5347\u699C"],
-  ["58", "\u8BF4\u5531\u699C"],
-  ["57", "\u559C\u529B\u7535\u97F3\u699C"],
-  ["28", "\u7F51\u7EDC\u6B4C\u66F2\u699C"],
-  ["5", "\u5185\u5730\u699C"],
-  ["3", "\u6B27\u7F8E\u699C"],
-  ["59", "\u9999\u6E2F\u5730\u533A\u699C"],
-  ["16", "\u97E9\u56FD\u699C"],
-  ["60", "\u6296\u5FEB\u699C"],
-  ["29", "\u5F71\u89C6\u91D1\u66F2\u699C"],
-  ["17", "\u65E5\u672C\u699C"],
-  ["52", "\u817E\u8BAF\u97F3\u4E50\u4EBA\u539F\u521B\u699C"],
-  ["36", "K\u6B4C\u91D1\u66F2\u699C"],
-  ["61", "\u53F0\u6E7E\u5730\u533A\u699C"],
-  ["63", "DJ\u821E\u66F2\u699C"],
-  ["64", "\u7EFC\u827A\u65B0\u6B4C\u699C"],
-  ["65", "\u56FD\u98CE\u70ED\u6B4C\u699C"],
-  ["67", "\u542C\u6B4C\u8BC6\u66F2\u699C"],
-  ["72", "\u52A8\u6F2B\u97F3\u4E50\u699C"]
+var TOP_LIST_GROUPS = [
+  {
+    title: "\u5DC5\u5CF0\u699C",
+    data: [
+      ["4", "\u6D41\u884C\u6307\u6570\u699C", "\u6309\u6B4C\u66F2\u5728 QQ \u97F3\u4E50\u4E2D\u7684\u6D41\u884C\u8D8B\u52BF\u6574\u7406\u3002"],
+      ["26", "\u70ED\u6B4C\u699C", "\u5448\u73B0 QQ \u97F3\u4E50\u5F53\u524D\u7EFC\u5408\u70ED\u5EA6\u8F83\u9AD8\u7684\u6B4C\u66F2\u3002"],
+      ["27", "\u65B0\u6B4C\u699C", "\u6536\u5F55\u8FD1\u671F\u53D1\u5E03\u5E76\u53D7\u5230\u5173\u6CE8\u7684\u65B0\u6B4C\u3002"],
+      ["62", "\u98D9\u5347\u699C", "\u805A\u5408\u8FD1\u671F\u70ED\u5EA6\u5FEB\u901F\u4E0A\u5347\u7684\u6B4C\u66F2\u3002"]
+    ]
+  },
+  {
+    title: "\u5730\u533A\u699C",
+    data: [
+      ["5", "\u5185\u5730\u699C", "\u805A\u5408\u4E2D\u56FD\u5185\u5730\u70ED\u95E8\u6B4C\u66F2\u3002"],
+      ["59", "\u9999\u6E2F\u5730\u533A\u699C", "\u805A\u5408\u4E2D\u56FD\u9999\u6E2F\u5730\u533A\u70ED\u95E8\u6B4C\u66F2\u3002"],
+      ["61", "\u53F0\u6E7E\u5730\u533A\u699C", "\u805A\u5408\u4E2D\u56FD\u53F0\u6E7E\u5730\u533A\u70ED\u95E8\u6B4C\u66F2\u3002"],
+      ["3", "\u6B27\u7F8E\u699C", "\u805A\u5408\u6B27\u7F8E\u5730\u533A\u70ED\u95E8\u6B4C\u66F2\u3002"],
+      ["16", "\u97E9\u56FD\u699C", "\u805A\u5408\u97E9\u56FD\u70ED\u95E8\u6B4C\u66F2\u3002"],
+      ["17", "\u65E5\u672C\u699C", "\u805A\u5408\u65E5\u672C\u70ED\u95E8\u6B4C\u66F2\u3002"]
+    ]
+  },
+  {
+    title: "\u7C7B\u578B\u699C",
+    data: [
+      ["58", "\u8BF4\u5531\u699C", "\u805A\u5408\u70ED\u95E8\u8BF4\u5531\u4F5C\u54C1\u3002"],
+      ["57", "\u559C\u529B\u7535\u97F3\u699C", "\u805A\u5408\u70ED\u95E8\u7535\u5B50\u97F3\u4E50\u4E0E\u821E\u66F2\u4F5C\u54C1\u3002"],
+      ["28", "\u7F51\u7EDC\u6B4C\u66F2\u699C", "\u805A\u5408\u8FD1\u671F\u7F51\u7EDC\u70ED\u95E8\u6B4C\u66F2\u3002"],
+      ["29", "\u5F71\u89C6\u91D1\u66F2\u699C", "\u805A\u5408\u5F71\u89C6\u5267\u4E0E\u7EFC\u827A\u539F\u58F0\u91D1\u66F2\u3002"],
+      ["36", "K\u6B4C\u91D1\u66F2\u699C", "\u805A\u5408\u7528\u6237\u559C\u7231\u7684 K \u6B4C\u70ED\u95E8\u66F2\u76EE\u3002"],
+      ["63", "DJ\u821E\u66F2\u699C", "\u805A\u5408\u70ED\u95E8 DJ \u4E0E\u821E\u66F2\u4F5C\u54C1\u3002"],
+      ["64", "\u7EFC\u827A\u65B0\u6B4C\u699C", "\u6536\u5F55\u8FD1\u671F\u7EFC\u827A\u8282\u76EE\u70ED\u95E8\u65B0\u6B4C\u3002"],
+      ["65", "\u56FD\u98CE\u70ED\u6B4C\u699C", "\u805A\u5408\u70ED\u95E8\u56FD\u98CE\u97F3\u4E50\u4F5C\u54C1\u3002"],
+      ["72", "\u52A8\u6F2B\u97F3\u4E50\u699C", "\u805A\u5408\u70ED\u95E8\u52A8\u6F2B\u4E0E\u4E8C\u6B21\u5143\u97F3\u4E50\u3002"]
+    ]
+  },
+  {
+    title: "\u7279\u8272\u699C",
+    data: [
+      ["60", "\u6296\u5FEB\u699C", "\u805A\u5408\u6296\u97F3\u4E0E\u5FEB\u624B\u5E73\u53F0\u8FD1\u671F\u70ED\u95E8\u97F3\u4E50\u3002"],
+      ["52", "\u817E\u8BAF\u97F3\u4E50\u4EBA\u539F\u521B\u699C", "\u805A\u5408\u817E\u8BAF\u97F3\u4E50\u4EBA\u539F\u521B\u4F5C\u54C1\u3002"],
+      ["67", "\u542C\u6B4C\u8BC6\u66F2\u699C", "\u6309\u542C\u6B4C\u8BC6\u66F2\u70ED\u5EA6\u6574\u7406\u7684\u6B4C\u66F2\u3002"]
+    ]
+  }
 ];
 var SHEET_TAGS = [
   ["10000000", "\u63A8\u8350"],
@@ -403,7 +441,7 @@ async function importMusicSheet(urlLike) {
 }
 module.exports = {
   platform: "QQ\u97F3\u4E50",
-  version: "1.0.0",
+  version: "1.1.0",
   author: "zero",
   description: "\u72EC\u7ACB QQ \u97F3\u4E50\u63D2\u4EF6\uFF1A\u641C\u7D22\u3001\u64AD\u653E\u3001\u6B4C\u8BCD\u300122 \u4E2A\u699C\u5355\u3001\u63A8\u8350\u6B4C\u5355\u3001\u6B4C\u5355\u8BE6\u60C5\u548C\u8BC4\u8BBA\u3002",
   cacheControl: "no-store",
@@ -416,9 +454,7 @@ module.exports = {
   getLyric,
   getMusicInfo,
   getTopLists: function() {
-    return Promise.resolve([{ title: "QQ \u97F3\u4E50\u699C\u5355", data: TOP_LISTS.map(function(item) {
-      return { id: item[0], bangId: item[0], title: item[1] };
-    }) }]);
+    return Promise.resolve(createTopListGroups("qq", TOP_LIST_GROUPS));
   },
   getTopListDetail,
   getRecommendSheetTags: function() {

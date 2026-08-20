@@ -120,6 +120,22 @@ var require_shared = __commonJS({
       if (!matches || !matches.length) throw new Error("\u65E0\u6CD5\u8BC6\u522B ID");
       return matches[matches.length - 1];
     }
+    function createTopListGroups2(platformKey, groups) {
+      return groups.map(function(group) {
+        return {
+          title: group.title,
+          data: group.data.map(function(item) {
+            return {
+              id: text2(item[0]),
+              bangId: text2(item[0]),
+              title: item[1],
+              description: item[2],
+              artwork: "https://droidzf.github.io/musicfree/covers/" + platformKey + "-" + text2(item[0]) + ".png"
+            };
+          })
+        };
+      });
+    }
     module2.exports = {
       axios: axios2,
       PAGE_SIZE: PAGE_SIZE2,
@@ -133,7 +149,8 @@ var require_shared = __commonJS({
       userVariables,
       resolveMedia: resolveMedia2,
       getComments: getComments2,
-      extractNumericId: extractNumericId2
+      extractNumericId: extractNumericId2,
+      createTopListGroups: createTopListGroups2
     };
   }
 });
@@ -149,15 +166,26 @@ var {
   formatLrcTime,
   resolveMedia,
   getComments,
-  extractNumericId
+  extractNumericId,
+  createTopListGroups
 } = require_shared();
-var TOP_LISTS = [
-  ["93", "\u98D9\u5347\u699C"],
-  ["17", "\u65B0\u6B4C\u699C"],
-  ["16", "\u70ED\u6B4C\u699C"],
-  ["158", "\u6296\u97F3\u699C"],
-  ["176", "\u4E07\u7269\u699C"],
-  ["145", "\u7545\u542C\u699C"]
+var TOP_LIST_GROUPS = [
+  {
+    title: "\u5DC5\u5CF0\u699C",
+    data: [
+      ["93", "\u98D9\u5347\u699C", "\u805A\u5408\u8FD1\u671F\u70ED\u5EA6\u5FEB\u901F\u4E0A\u5347\u7684\u6B4C\u66F2\u3002"],
+      ["17", "\u65B0\u6B4C\u699C", "\u6536\u5F55\u8FD1\u671F\u53D1\u5E03\u5E76\u53D7\u5230\u5173\u6CE8\u7684\u65B0\u6B4C\u3002"],
+      ["16", "\u70ED\u6B4C\u699C", "\u5448\u73B0\u9177\u6211\u97F3\u4E50\u5F53\u524D\u7EFC\u5408\u70ED\u5EA6\u8F83\u9AD8\u7684\u6B4C\u66F2\u3002"]
+    ]
+  },
+  {
+    title: "\u7279\u8272\u699C",
+    data: [
+      ["158", "\u6296\u97F3\u699C", "\u6536\u5F55\u77ED\u89C6\u9891\u5E73\u53F0\u8FD1\u671F\u70ED\u95E8\u97F3\u4E50\u3002"],
+      ["176", "\u4E07\u7269\u699C", "\u5C55\u793A\u8DE8\u573A\u666F\u3001\u8DE8\u98CE\u683C\u7684\u70ED\u95E8\u97F3\u4E50\u3002"],
+      ["145", "\u7545\u542C\u699C", "\u805A\u5408\u8FD1\u671F\u7528\u6237\u6301\u7EED\u6536\u542C\u7684\u70ED\u95E8\u6B4C\u66F2\u3002"]
+    ]
+  }
 ];
 var SHEET_TAGS = [
   ["2189", "\u6296\u97F3"],
@@ -320,7 +348,7 @@ async function importMusicSheet(urlLike) {
 }
 module.exports = {
   platform: "\u9177\u6211\u97F3\u4E50",
-  version: "1.0.0",
+  version: "1.1.0",
   author: "zero",
   description: "\u72EC\u7ACB\u9177\u6211\u97F3\u4E50\u63D2\u4EF6\uFF1A\u641C\u7D22\u3001\u64AD\u653E\u3001\u6B4C\u8BCD\u3001\u699C\u5355\u3001\u63A8\u8350\u6B4C\u5355\u3001\u6B4C\u5355\u8BE6\u60C5\u548C\u8BC4\u8BBA\u3002",
   cacheControl: "no-store",
@@ -333,14 +361,7 @@ module.exports = {
   getLyric,
   getMusicInfo,
   getTopLists: function() {
-    return Promise.resolve([
-      {
-        title: "\u9177\u6211\u699C\u5355",
-        data: TOP_LISTS.map(function(item) {
-          return { id: item[0], bangId: item[0], title: item[1] };
-        })
-      }
-    ]);
+    return Promise.resolve(createTopListGroups("kuwo", TOP_LIST_GROUPS));
   },
   getTopListDetail,
   getRecommendSheetTags: function() {
