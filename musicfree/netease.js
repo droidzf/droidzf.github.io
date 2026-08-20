@@ -125,12 +125,14 @@ var require_shared = __commonJS({
         return {
           title: group.title,
           data: group.data.map(function(item) {
+            const coverImg = "https://droidzf.github.io/musicfree/covers/" + platformKey + "-" + text2(item[0]) + ".png";
             return {
               id: text2(item[0]),
               bangId: text2(item[0]),
               title: item[1],
               description: item[2],
-              artwork: "https://droidzf.github.io/musicfree/covers/" + platformKey + "-" + text2(item[0]) + ".png"
+              coverImg,
+              artwork: coverImg
             };
           })
         };
@@ -307,9 +309,11 @@ async function playlistPage(sheetItem, page, resultKey) {
     musicList: tracks.map(mapMusic)
   };
   if (currentPage === 1) {
+    const coverImg = text(sheetItem.coverImg || sheetItem.artwork) || text(playlist.coverImgUrl);
     result[resultKey] = {
       title: text(playlist.name || sheetItem.title),
-      artwork: text(playlist.coverImgUrl),
+      coverImg,
+      artwork: coverImg,
       description: text(playlist.description),
       worksNum: Number(playlist.trackCount) || ids.length,
       playCount: Number(playlist.playCount) || void 0,
@@ -375,7 +379,7 @@ async function importMusicSheet(urlLike) {
 }
 module.exports = {
   platform: "\u7F51\u6613\u4E91\u97F3\u4E50",
-  version: "1.2.0",
+  version: "1.2.1",
   srcUrl: "https://droidzf.github.io/musicfree/netease.js",
   author: "zero",
   description: "\u72EC\u7ACB\u7F51\u6613\u4E91\u97F3\u4E50\u63D2\u4EF6\uFF1A\u641C\u7D22\u3001\u64AD\u653E\u3001\u6B4C\u8BCD\u3001\u699C\u5355\u3001\u63A8\u8350\u6B4C\u5355\u3001\u5B8C\u6574\u6B4C\u5355\u8BE6\u60C5\u548C\u8BC4\u8BBA\u3002",

@@ -125,12 +125,14 @@ var require_shared = __commonJS({
         return {
           title: group.title,
           data: group.data.map(function(item) {
+            const coverImg = "https://droidzf.github.io/musicfree/covers/" + platformKey + "-" + text2(item[0]) + ".png";
             return {
               id: text2(item[0]),
               bangId: text2(item[0]),
               title: item[1],
               description: item[2],
-              artwork: "https://droidzf.github.io/musicfree/covers/" + platformKey + "-" + text2(item[0]) + ".png"
+              coverImg,
+              artwork: coverImg
             };
           })
         };
@@ -351,10 +353,18 @@ async function getTopListDetail(topListItem, page) {
     "toplist"
   );
   const data = response.data && response.data.toplist && response.data.toplist.data;
+  const meta = data && data.data || data;
   return {
     isEnd: true,
     musicList: (data && data.songInfoList || []).map(mapMusic),
-    topListItem: data ? { title: text(data.title || topListItem.title), artwork: text(data.frontPicUrl || data.headPicUrl) } : void 0
+    topListItem: data ? (function() {
+      const coverImg = text(topListItem.coverImg || topListItem.artwork) || text(meta && (meta.frontPicUrl || meta.headPicUrl));
+      return {
+        title: text(meta && meta.title || topListItem.title),
+        coverImg,
+        artwork: coverImg
+      };
+    })() : void 0
   };
 }
 async function getRecommendSheetsByTag(tag, page) {
@@ -441,7 +451,7 @@ async function importMusicSheet(urlLike) {
 }
 module.exports = {
   platform: "QQ\u97F3\u4E50",
-  version: "1.2.0",
+  version: "1.2.1",
   srcUrl: "https://droidzf.github.io/musicfree/qq.js",
   author: "zero",
   description: "\u72EC\u7ACB QQ \u97F3\u4E50\u63D2\u4EF6\uFF1A\u641C\u7D22\u3001\u64AD\u653E\u3001\u6B4C\u8BCD\u300122 \u4E2A\u699C\u5355\u3001\u63A8\u8350\u6B4C\u5355\u3001\u6B4C\u5355\u8BE6\u60C5\u548C\u8BC4\u8BBA\u3002",
