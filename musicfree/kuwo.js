@@ -348,7 +348,8 @@ async function importMusicSheet(urlLike) {
 }
 module.exports = {
   platform: "\u9177\u6211\u97F3\u4E50",
-  version: "1.1.0",
+  version: "1.2.0",
+  srcUrl: "https://droidzf.github.io/musicfree/kuwo.js",
   author: "zero",
   description: "\u72EC\u7ACB\u9177\u6211\u97F3\u4E50\u63D2\u4EF6\uFF1A\u641C\u7D22\u3001\u64AD\u653E\u3001\u6B4C\u8BCD\u3001\u699C\u5355\u3001\u63A8\u8350\u6B4C\u5355\u3001\u6B4C\u5355\u8BE6\u60C5\u548C\u8BC4\u8BBA\u3002",
   cacheControl: "no-store",

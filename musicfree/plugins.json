@@ -1,25 +1,25 @@
 {
-  "desc": "MusicFree 独立音乐渠道插件订阅（含分类排行榜、榜单简介和独立封面）",
+  "desc": "MusicFree 独立音乐渠道插件订阅（支持分享、在线更新、分类排行榜和独立封面）",
   "plugins": [
     {
       "name": "QQ音乐",
       "url": "https://droidzf.github.io/musicfree/qq.js",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "name": "网易云音乐",
       "url": "https://droidzf.github.io/musicfree/netease.js",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "name": "酷我音乐",
       "url": "https://droidzf.github.io/musicfree/kuwo.js",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "name": "酷狗音乐",
       "url": "https://droidzf.github.io/musicfree/kugou.js",
-      "version": "1.1.0"
+      "version": "1.2.0"
     },
     {
       "name": "元力qq",
