@@ -17,6 +17,15 @@ var require_shared = __commonJS({
     function stripHtml2(value) {
       return text2(value).replace(/<[^>]*>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
     }
+    function toHttps2(value, size) {
+      return text2(value).replace(/^http:\/\//i, "https://").replace(/\{size\}/g, text2(size, "400"));
+    }
+    function parseJsonp(value) {
+      const raw = text2(value).trim();
+      const start = raw.indexOf("(");
+      const end = raw.lastIndexOf(")");
+      return JSON.parse(start >= 0 && end > start ? raw.slice(start + 1, end) : raw);
+    }
     function parseDuration2(value) {
       if (typeof value === "number") {
         return value > 1e5 ? Math.floor(value / 1e3) : Math.floor(value);
@@ -120,30 +129,14 @@ var require_shared = __commonJS({
       if (!matches || !matches.length) throw new Error("\u65E0\u6CD5\u8BC6\u522B ID");
       return matches[matches.length - 1];
     }
-    function createTopListGroups2(platformKey, groups) {
-      return groups.map(function(group) {
-        return {
-          title: group.title,
-          data: group.data.map(function(item) {
-            const coverImg = "https://droidzf.github.io/musicfree/covers/" + platformKey + "-" + text2(item[0]) + ".png";
-            return {
-              id: text2(item[0]),
-              bangId: text2(item[0]),
-              title: item[1],
-              description: item[2],
-              coverImg,
-              artwork: coverImg
-            };
-          })
-        };
-      });
-    }
     module2.exports = {
       axios: axios2,
       PAGE_SIZE: PAGE_SIZE2,
       UA: UA2,
       text: text2,
       stripHtml: stripHtml2,
+      toHttps: toHttps2,
+      parseJsonp,
       parseDuration: parseDuration2,
       artistNames,
       formatLrcTime: formatLrcTime2,
@@ -151,8 +144,7 @@ var require_shared = __commonJS({
       userVariables,
       resolveMedia: resolveMedia2,
       getComments: getComments2,
-      extractNumericId: extractNumericId2,
-      createTopListGroups: createTopListGroups2
+      extractNumericId: extractNumericId2
     };
   }
 });
@@ -164,52 +156,61 @@ var {
   UA,
   text,
   stripHtml,
+  toHttps,
   parseDuration,
   formatLrcTime,
   resolveMedia,
   getComments,
-  extractNumericId,
-  createTopListGroups
+  extractNumericId
 } = require_shared();
-var TOP_LIST_GROUPS = [
-  {
-    title: "\u5DC5\u5CF0\u699C",
-    data: [
-      ["93", "\u98D9\u5347\u699C", "\u805A\u5408\u8FD1\u671F\u70ED\u5EA6\u5FEB\u901F\u4E0A\u5347\u7684\u6B4C\u66F2\u3002"],
-      ["17", "\u65B0\u6B4C\u699C", "\u6536\u5F55\u8FD1\u671F\u53D1\u5E03\u5E76\u53D7\u5230\u5173\u6CE8\u7684\u65B0\u6B4C\u3002"],
-      ["16", "\u70ED\u6B4C\u699C", "\u5448\u73B0\u9177\u6211\u97F3\u4E50\u5F53\u524D\u7EFC\u5408\u70ED\u5EA6\u8F83\u9AD8\u7684\u6B4C\u66F2\u3002"]
-    ]
-  },
-  {
-    title: "\u7279\u8272\u699C",
-    data: [
-      ["158", "\u6296\u97F3\u699C", "\u6536\u5F55\u77ED\u89C6\u9891\u5E73\u53F0\u8FD1\u671F\u70ED\u95E8\u97F3\u4E50\u3002"],
-      ["176", "\u4E07\u7269\u699C", "\u5C55\u793A\u8DE8\u573A\u666F\u3001\u8DE8\u98CE\u683C\u7684\u70ED\u95E8\u97F3\u4E50\u3002"],
-      ["145", "\u7545\u542C\u699C", "\u805A\u5408\u8FD1\u671F\u7528\u6237\u6301\u7EED\u6536\u542C\u7684\u70ED\u95E8\u6B4C\u66F2\u3002"]
-    ]
+var KUWO_SECRET_COOKIE = "Hm_Iuvt_cdb524f42f23cer9b268564v7y735ewrq2324";
+var KUWO_SECRET_TOKEN = "MusicFreeOfficialDataClient";
+function createKuwoSecret(token, key) {
+  let digits = "";
+  for (let index = 0; index < key.length; index += 1) {
+    digits += key.charCodeAt(index).toString();
   }
-];
-var SHEET_TAGS = [
-  ["2189", "\u6296\u97F3"],
-  ["1265", "\u7ECF\u5178"],
-  ["2200", "\u60C5\u6B4C"],
-  ["2199", "BGM"],
-  ["2212", "\u6F14\u5531\u4F1A"],
-  ["1877", "\u6E38\u620F"],
-  ["155", "\u6000\u65E7"],
-  ["621", "\u7F51\u7EDC"],
-  ["2201", "\u5408\u5531"],
-  ["181", "ACG"],
-  ["171", "\u513F\u7AE5"]
-];
+  const step = Math.floor(digits.length / 5);
+  const multiplier = parseInt(
+    digits.charAt(step) + digits.charAt(step * 2) + digits.charAt(step * 3) + digits.charAt(step * 4) + digits.charAt(step * 5),
+    10
+  );
+  const increment = Math.ceil(key.length / 2);
+  const modulus = Math.pow(2, 31) - 1;
+  let seed = Math.round(1e9 * Math.random()) % 1e8;
+  let mixed = digits + seed;
+  while (mixed.length > 10) {
+    mixed = (parseInt(mixed.substring(0, 10), 10) + parseInt(mixed.substring(10), 10)).toString();
+  }
+  let state = (multiplier * Number(mixed) + increment) % modulus;
+  let result = "";
+  for (let index = 0; index < token.length; index += 1) {
+    const value = token.charCodeAt(index) ^ Math.floor(state / modulus * 255);
+    result += (value < 16 ? "0" : "") + value.toString(16);
+    state = (multiplier * state + increment) % modulus;
+  }
+  let suffix = seed.toString(16);
+  while (suffix.length < 8) suffix = "0" + suffix;
+  return result + suffix;
+}
+function kuwoWebHeaders() {
+  return {
+    Secret: createKuwoSecret(KUWO_SECRET_TOKEN, KUWO_SECRET_COOKIE),
+    Cookie: KUWO_SECRET_COOKIE + "=" + KUWO_SECRET_TOKEN,
+    Referer: "https://www.kuwo.cn/playlists",
+    "User-Agent": UA
+  };
+}
 function artwork(item) {
   const path = text(item.web_albumpic_short || item.WEB_ALBUMPIC_SHORT);
-  if (!path) return text(item.pic || item.PIC || item.albumpic);
-  if (/^https?:\/\//i.test(path)) return path;
+  if (!path) return toHttps(item.pic || item.PIC || item.albumpic);
+  if (/^https?:\/\//i.test(path)) return toHttps(path);
   return "https://img1.kuwo.cn/star/albumcover/300/" + path.replace(/^\//, "");
 }
 function mapMusic(item) {
-  const rid = text(item.rid || item.DC_TARGETID || item.musicrid || item.MUSICRID).replace(
+  const rid = text(
+    item.rid || item.DC_TARGETID || item.musicrid || item.MUSICRID || item.id
+  ).replace(
     /^MUSIC_/,
     ""
   );
@@ -222,6 +223,30 @@ function mapMusic(item) {
     artwork: artwork(item),
     sourceRid: rid
   };
+}
+async function getTopLists() {
+  const response = await axios.get("https://wapi.kuwo.cn/api/pc/bang/list", {
+    headers: { "User-Agent": UA, Referer: "https://www.kuwo.cn/rankList" },
+    timeout: 8e3
+  });
+  const root = response.data && response.data.data || response.data || {};
+  return (root.child || []).map(function(group) {
+    return {
+      title: text(group.disname || group.name),
+      data: (group.child || []).map(function(item) {
+        const coverImg = toHttps(item.pic5 || item.pic2 || item.pic);
+        return {
+          id: text(item.sourceid || item.id),
+          bangId: text(item.sourceid || item.id),
+          title: text(item.disname || item.name),
+          description: text(item.intro || item.tips),
+          coverImg,
+          artwork: coverImg,
+          updateTime: text(item.pubTime)
+        };
+      })
+    };
+  });
 }
 async function search(query, page, type) {
   if (type !== "music") return { isEnd: true, data: [] };
@@ -298,28 +323,26 @@ async function getTopListDetail(topListItem, page) {
 }
 async function getRecommendSheetsByTag(tag, page) {
   const currentPage = Math.max(1, Number(page) || 1);
-  const response = await axios.get("https://music.haitangw.cc/music/gedan/kw.php", {
-    params: {
-      type: "getTagLists",
-      id: text(tag && tag.id, "2189"),
-      page: currentPage,
-      limit: 15,
-      order: "hot"
-    },
+  const tagId = text(tag && tag.id, "__recommend__");
+  const endpoint = tagId === "__recommend__" ? "https://www.kuwo.cn/api/www/classify/playlist/getRcmPlayList" : "https://www.kuwo.cn/api/www/classify/playlist/getTagPlayList";
+  const params = { pn: currentPage, rn: 20, httpsStatus: 1, plat: "web_www" };
+  if (tagId === "__recommend__") params.order = "new";
+  else params.id = tagId;
+  const response = await axios.get(endpoint, {
+    params,
+    headers: kuwoWebHeaders(),
     timeout: 8e3
   });
-  const root = response.data || {};
-  if (Number(root.code) !== 200) throw new Error(root.msg || "\u9177\u6211\u6B4C\u5355\u52A0\u8F7D\u5931\u8D25");
-  const data = root.data || {};
+  const data = response.data && response.data.data || {};
   const list = data.data || [];
   return {
-    isEnd: currentPage * 15 >= Number(data.total || 0) || list.length < 15,
+    isEnd: currentPage * 20 >= Number(data.total || 0) || list.length < 20,
     data: list.map(function(item) {
       return {
         id: text(item.id),
         title: text(item.name),
         artist: text(item.uname),
-        artwork: text(item.img),
+        artwork: toHttps(item.img),
         description: text(item.desc || item.info),
         worksNum: Number(item.total) || void 0,
         playCount: Number(item.listencnt) || void 0
@@ -329,23 +352,59 @@ async function getRecommendSheetsByTag(tag, page) {
 }
 async function getMusicSheetInfo(sheetItem, page) {
   const currentPage = Math.max(1, Number(page) || 1);
-  const response = await axios.get("https://music.haitangw.cc/music/gedan/kwlist.php", {
-    params: { id: sheetItem.id, page: currentPage, limit: 500, type: "list" },
+  const pageSize = 30;
+  const response = await axios.get("http://nplserver.kuwo.cn/pl.svc", {
+    params: {
+      op: "getlistinfo",
+      pid: sheetItem.id,
+      pn: currentPage - 1,
+      rn: pageSize,
+      encode: "utf8",
+      keyset: "pl2012",
+      vipver: "MUSIC_9.1.1.2_BCS2",
+      newver: 1
+    },
+    headers: { "User-Agent": UA },
     timeout: 9e3
   });
-  const root = response.data || {};
-  if (Number(root.code) !== 200) throw new Error(root.msg || "\u9177\u6211\u6B4C\u5355\u8BE6\u60C5\u52A0\u8F7D\u5931\u8D25");
-  const data = root.data || {};
-  const result = { isEnd: true, musicList: (data.musicList || []).map(mapMusic) };
+  const data = response.data || {};
+  const musicList = data.musiclist || data.musicList || [];
+  const result = {
+    isEnd: currentPage * pageSize >= Number(data.total || 0) || musicList.length < pageSize,
+    musicList: musicList.map(mapMusic)
+  };
   if (currentPage === 1) {
     result.sheetItem = {
-      title: text(data.name || sheetItem.title),
-      artist: text(data.userName),
-      artwork: text(data.img),
-      worksNum: Number(data.total) || result.musicList.length
+      title: text(data.title || sheetItem.title),
+      artist: text(data.uname),
+      artwork: toHttps(data.pic),
+      description: text(data.info),
+      worksNum: Number(data.total) || musicList.length,
+      playCount: Number(data.playnum) || void 0
     };
   }
   return result;
+}
+async function getRecommendSheetTags() {
+  const response = await axios.get("https://www.kuwo.cn/api/www/playlist/getTagList", {
+    params: { httpsStatus: 1, plat: "web_www" },
+    headers: kuwoWebHeaders(),
+    timeout: 8e3
+  });
+  const groups = response.data && response.data.data || [];
+  return {
+    pinned: [{ id: "__recommend__", title: "\u7CBE\u9009\u6B4C\u5355" }],
+    data: groups.filter(function(group) {
+      return Array.isArray(group.data) && group.data.length > 0;
+    }).map(function(group) {
+      return {
+        title: text(group.name),
+        data: group.data.map(function(item) {
+          return { id: text(item.id), title: text(item.name) };
+        })
+      };
+    })
+  };
 }
 async function importMusicSheet(urlLike) {
   const id = extractNumericId(urlLike);
@@ -353,7 +412,7 @@ async function importMusicSheet(urlLike) {
 }
 module.exports = {
   platform: "\u9177\u6211\u97F3\u4E50",
-  version: "1.2.1",
+  version: "1.3.0",
   srcUrl: "https://droidzf.github.io/musicfree/kuwo.js",
   author: "zero",
   description: "\u72EC\u7ACB\u9177\u6211\u97F3\u4E50\u63D2\u4EF6\uFF1A\u641C\u7D22\u3001\u64AD\u653E\u3001\u6B4C\u8BCD\u3001\u699C\u5355\u3001\u63A8\u8350\u6B4C\u5355\u3001\u6B4C\u5355\u8BE6\u60C5\u548C\u8BC4\u8BBA\u3002",
@@ -366,23 +425,9 @@ module.exports = {
   },
   getLyric,
   getMusicInfo,
-  getTopLists: function() {
-    return Promise.resolve(createTopListGroups("kuwo", TOP_LIST_GROUPS));
-  },
+  getTopLists,
   getTopListDetail,
-  getRecommendSheetTags: function() {
-    return Promise.resolve({
-      pinned: [{ id: "2189", title: "\u6296\u97F3" }],
-      data: [
-        {
-          title: "\u6B4C\u5355\u5206\u7C7B",
-          data: SHEET_TAGS.map(function(item) {
-            return { id: item[0], title: item[1] };
-          })
-        }
-      ]
-    });
-  },
+  getRecommendSheetTags,
   getRecommendSheetsByTag,
   getMusicSheetInfo,
   importMusicSheet,

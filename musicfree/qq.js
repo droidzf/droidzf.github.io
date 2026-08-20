@@ -17,6 +17,15 @@ var require_shared = __commonJS({
     function stripHtml2(value) {
       return text2(value).replace(/<[^>]*>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
     }
+    function toHttps2(value, size) {
+      return text2(value).replace(/^http:\/\//i, "https://").replace(/\{size\}/g, text2(size, "400"));
+    }
+    function parseJsonp2(value) {
+      const raw = text2(value).trim();
+      const start = raw.indexOf("(");
+      const end = raw.lastIndexOf(")");
+      return JSON.parse(start >= 0 && end > start ? raw.slice(start + 1, end) : raw);
+    }
     function parseDuration2(value) {
       if (typeof value === "number") {
         return value > 1e5 ? Math.floor(value / 1e3) : Math.floor(value);
@@ -120,30 +129,14 @@ var require_shared = __commonJS({
       if (!matches || !matches.length) throw new Error("\u65E0\u6CD5\u8BC6\u522B ID");
       return matches[matches.length - 1];
     }
-    function createTopListGroups2(platformKey, groups) {
-      return groups.map(function(group) {
-        return {
-          title: group.title,
-          data: group.data.map(function(item) {
-            const coverImg = "https://droidzf.github.io/musicfree/covers/" + platformKey + "-" + text2(item[0]) + ".png";
-            return {
-              id: text2(item[0]),
-              bangId: text2(item[0]),
-              title: item[1],
-              description: item[2],
-              coverImg,
-              artwork: coverImg
-            };
-          })
-        };
-      });
-    }
     module2.exports = {
       axios: axios2,
       PAGE_SIZE: PAGE_SIZE2,
       UA: UA2,
       text: text2,
       stripHtml: stripHtml2,
+      toHttps: toHttps2,
+      parseJsonp: parseJsonp2,
       parseDuration: parseDuration2,
       artistNames: artistNames2,
       formatLrcTime,
@@ -151,8 +144,7 @@ var require_shared = __commonJS({
       userVariables,
       resolveMedia: resolveMedia2,
       getComments: getComments2,
-      extractNumericId: extractNumericId2,
-      createTopListGroups: createTopListGroups2
+      extractNumericId: extractNumericId2
     };
   }
 });
@@ -164,70 +156,15 @@ var {
   UA,
   text,
   stripHtml,
+  toHttps,
+  parseJsonp,
   parseDuration,
   artistNames,
   decodeBase64,
   resolveMedia,
   getComments,
-  extractNumericId,
-  createTopListGroups
+  extractNumericId
 } = require_shared();
-var TOP_LIST_GROUPS = [
-  {
-    title: "\u5DC5\u5CF0\u699C",
-    data: [
-      ["4", "\u6D41\u884C\u6307\u6570\u699C", "\u6309\u6B4C\u66F2\u5728 QQ \u97F3\u4E50\u4E2D\u7684\u6D41\u884C\u8D8B\u52BF\u6574\u7406\u3002"],
-      ["26", "\u70ED\u6B4C\u699C", "\u5448\u73B0 QQ \u97F3\u4E50\u5F53\u524D\u7EFC\u5408\u70ED\u5EA6\u8F83\u9AD8\u7684\u6B4C\u66F2\u3002"],
-      ["27", "\u65B0\u6B4C\u699C", "\u6536\u5F55\u8FD1\u671F\u53D1\u5E03\u5E76\u53D7\u5230\u5173\u6CE8\u7684\u65B0\u6B4C\u3002"],
-      ["62", "\u98D9\u5347\u699C", "\u805A\u5408\u8FD1\u671F\u70ED\u5EA6\u5FEB\u901F\u4E0A\u5347\u7684\u6B4C\u66F2\u3002"]
-    ]
-  },
-  {
-    title: "\u5730\u533A\u699C",
-    data: [
-      ["5", "\u5185\u5730\u699C", "\u805A\u5408\u4E2D\u56FD\u5185\u5730\u70ED\u95E8\u6B4C\u66F2\u3002"],
-      ["59", "\u9999\u6E2F\u5730\u533A\u699C", "\u805A\u5408\u4E2D\u56FD\u9999\u6E2F\u5730\u533A\u70ED\u95E8\u6B4C\u66F2\u3002"],
-      ["61", "\u53F0\u6E7E\u5730\u533A\u699C", "\u805A\u5408\u4E2D\u56FD\u53F0\u6E7E\u5730\u533A\u70ED\u95E8\u6B4C\u66F2\u3002"],
-      ["3", "\u6B27\u7F8E\u699C", "\u805A\u5408\u6B27\u7F8E\u5730\u533A\u70ED\u95E8\u6B4C\u66F2\u3002"],
-      ["16", "\u97E9\u56FD\u699C", "\u805A\u5408\u97E9\u56FD\u70ED\u95E8\u6B4C\u66F2\u3002"],
-      ["17", "\u65E5\u672C\u699C", "\u805A\u5408\u65E5\u672C\u70ED\u95E8\u6B4C\u66F2\u3002"]
-    ]
-  },
-  {
-    title: "\u7C7B\u578B\u699C",
-    data: [
-      ["58", "\u8BF4\u5531\u699C", "\u805A\u5408\u70ED\u95E8\u8BF4\u5531\u4F5C\u54C1\u3002"],
-      ["57", "\u559C\u529B\u7535\u97F3\u699C", "\u805A\u5408\u70ED\u95E8\u7535\u5B50\u97F3\u4E50\u4E0E\u821E\u66F2\u4F5C\u54C1\u3002"],
-      ["28", "\u7F51\u7EDC\u6B4C\u66F2\u699C", "\u805A\u5408\u8FD1\u671F\u7F51\u7EDC\u70ED\u95E8\u6B4C\u66F2\u3002"],
-      ["29", "\u5F71\u89C6\u91D1\u66F2\u699C", "\u805A\u5408\u5F71\u89C6\u5267\u4E0E\u7EFC\u827A\u539F\u58F0\u91D1\u66F2\u3002"],
-      ["36", "K\u6B4C\u91D1\u66F2\u699C", "\u805A\u5408\u7528\u6237\u559C\u7231\u7684 K \u6B4C\u70ED\u95E8\u66F2\u76EE\u3002"],
-      ["63", "DJ\u821E\u66F2\u699C", "\u805A\u5408\u70ED\u95E8 DJ \u4E0E\u821E\u66F2\u4F5C\u54C1\u3002"],
-      ["64", "\u7EFC\u827A\u65B0\u6B4C\u699C", "\u6536\u5F55\u8FD1\u671F\u7EFC\u827A\u8282\u76EE\u70ED\u95E8\u65B0\u6B4C\u3002"],
-      ["65", "\u56FD\u98CE\u70ED\u6B4C\u699C", "\u805A\u5408\u70ED\u95E8\u56FD\u98CE\u97F3\u4E50\u4F5C\u54C1\u3002"],
-      ["72", "\u52A8\u6F2B\u97F3\u4E50\u699C", "\u805A\u5408\u70ED\u95E8\u52A8\u6F2B\u4E0E\u4E8C\u6B21\u5143\u97F3\u4E50\u3002"]
-    ]
-  },
-  {
-    title: "\u7279\u8272\u699C",
-    data: [
-      ["60", "\u6296\u5FEB\u699C", "\u805A\u5408\u6296\u97F3\u4E0E\u5FEB\u624B\u5E73\u53F0\u8FD1\u671F\u70ED\u95E8\u97F3\u4E50\u3002"],
-      ["52", "\u817E\u8BAF\u97F3\u4E50\u4EBA\u539F\u521B\u699C", "\u805A\u5408\u817E\u8BAF\u97F3\u4E50\u4EBA\u539F\u521B\u4F5C\u54C1\u3002"],
-      ["67", "\u542C\u6B4C\u8BC6\u66F2\u699C", "\u6309\u542C\u6B4C\u8BC6\u66F2\u70ED\u5EA6\u6574\u7406\u7684\u6B4C\u66F2\u3002"]
-    ]
-  }
-];
-var SHEET_TAGS = [
-  ["10000000", "\u63A8\u8350"],
-  ["167", "\u6D41\u884C"],
-  ["185", "\u7F51\u7EDC"],
-  ["153", "\u6D41\u884C"],
-  ["59", "\u6000\u65E7"],
-  ["197", "\u8FD0\u52A8"],
-  ["62", "\u5F71\u89C6"],
-  ["18", "\u7ECF\u5178"],
-  ["16", "\u6447\u6EDA"],
-  ["71", "\u60C5\u6B4C"]
-];
 function qqRequest(moduleName, method, param, requestName) {
   const name = requestName || "req";
   const body = {
@@ -257,6 +194,13 @@ function qqRequest(moduleName, method, param, requestName) {
     timeout: 9e3
   });
 }
+function qqMusicuGet(body) {
+  return axios.get("https://u.y.qq.com/cgi-bin/musicu.fcg", {
+    params: { _: Date.now(), data: JSON.stringify(body) },
+    headers: { Cookie: "uin=", "User-Agent": UA, Referer: "https://y.qq.com/" },
+    timeout: 9e3
+  });
+}
 function mapMusic(item) {
   const rid = text(item.mid || item.songmid || item.id);
   const album = item.album || {};
@@ -270,6 +214,48 @@ function mapMusic(item) {
     artwork: albumMid ? "https://y.gtimg.cn/music/photo_new/T002R500x500M000" + albumMid + ".jpg" : "",
     sourceRid: rid
   };
+}
+async function getTopLists() {
+  const response = await qqMusicuGet({
+    comm: {
+      g_tk: 5381,
+      uin: 123456,
+      format: "json",
+      inCharset: "utf-8",
+      outCharset: "utf-8",
+      notice: 0,
+      platform: "h5",
+      needNewCode: 1,
+      ct: 23,
+      cv: 0
+    },
+    topList: {
+      module: "musicToplist.ToplistInfoServer",
+      method: "GetAll",
+      param: {}
+    }
+  });
+  const groups = response.data && response.data.topList && response.data.topList.data && response.data.topList.data.group;
+  return (groups || []).map(function(group) {
+    return {
+      title: text(group.groupName),
+      data: (group.toplist || []).map(function(item) {
+        const coverImg = toHttps(
+          item.frontPicUrl || item.headPicUrl || item.mbFrontPicUrl || item.musichallPicUrl
+        );
+        return {
+          id: text(item.topId),
+          bangId: text(item.topId),
+          title: text(item.title || item.musichallTitle),
+          description: stripHtml(item.intro || item.updateTips || item.titleDetail),
+          coverImg,
+          artwork: coverImg,
+          period: text(item.period),
+          updateTime: text(item.updateTime)
+        };
+      })
+    };
+  });
 }
 async function search(query, page, type) {
   if (type !== "music") return { isEnd: true, data: [] };
@@ -345,7 +331,7 @@ async function getTopListDetail(topListItem, page) {
   const currentPage = Math.max(1, Number(page) || 1);
   if (currentPage > 1) return { isEnd: true, musicList: [] };
   const topId = text(topListItem.bangId || topListItem.id);
-  const period = await getPeriod(topId);
+  const period = text(topListItem.period) || await getPeriod(topId);
   const response = await qqRequest(
     "musicToplist.ToplistInfoServer",
     "GetDetail",
@@ -369,58 +355,61 @@ async function getTopListDetail(topListItem, page) {
 }
 async function getRecommendSheetsByTag(tag, page) {
   const currentPage = Math.max(1, Number(page) || 1);
+  const pageSize = 20;
   const tagId = text(tag && tag.id, "10000000");
-  const body = { comm: { cv: 1602, ct: 20 } };
-  if (tagId === "10000000") {
-    body.playlist = {
-      module: "playlist.PlayListPlazaServer",
-      method: "get_playlist_by_tag",
-      param: {
-        id: 1e7,
-        sin: (currentPage - 1) * 15,
-        size: 15,
-        order: 5,
-        cur_page: currentPage
-      }
-    };
-  } else {
-    body.playlist = {
-      module: "playlist.PlayListCategoryServer",
-      method: "get_category_content",
-      param: {
-        titleid: Number(tagId),
-        caller: "0",
-        category_id: Number(tagId),
-        size: 15,
-        page: currentPage - 1,
-        use_page: 1
-      }
-    };
-  }
-  const response = await axios.post("https://u.y.qq.com/cgi-bin/musicu.fcg", body, {
-    headers: { "Content-Type": "application/json", "User-Agent": UA, Referer: "https://y.qq.com/" },
-    timeout: 9e3
-  });
-  const data = response.data && response.data.playlist && response.data.playlist.data;
-  const content = data && data.content;
-  const list = tagId === "10000000" ? data && data.v_playlist || [] : content && content.v_item || [];
+  const response = await axios.get(
+    "https://c.y.qq.com/splcloud/fcgi-bin/fcg_get_diss_by_tag.fcg",
+    {
+      params: {
+        inCharset: "utf8",
+        outCharset: "utf-8",
+        sortId: 5,
+        categoryId: tagId,
+        sin: pageSize * (currentPage - 1),
+        ein: pageSize * currentPage - 1
+      },
+      headers: { "User-Agent": UA, Referer: "https://y.qq.com/" },
+      responseType: "text",
+      timeout: 9e3
+    }
+  );
+  const data = parseJsonp(response.data).data || {};
+  const list = data.list || [];
   return {
-    isEnd: tagId === "10000000" ? list.length < 15 : currentPage * 15 >= Number(content && content.total_cnt || 0) || list.length < 15,
+    isEnd: currentPage * pageSize >= Number(data.sum || 0) || list.length < pageSize,
     data: list.map(function(item) {
-      const basic = item.basic || item;
-      const cover = basic.cover || {};
-      const creator = basic.creator || basic.creator_info || {};
       return {
-        id: text(basic.tid),
-        title: text(basic.title),
-        artist: text(creator.nick),
-        artwork: text(basic.cover_url_big || basic.cover_url_medium || cover.big_url || cover.medium_url),
-        description: text(basic.desc || basic.rcmdcontent),
-        worksNum: Number(basic.song_cnt) || (Array.isArray(basic.song_ids) ? basic.song_ids.length : void 0),
-        playCount: Number(basic.play_cnt || basic.access_num) || void 0
+        id: text(item.dissid),
+        title: text(item.dissname),
+        artist: text(item.creator && item.creator.name),
+        artwork: toHttps(item.imgurl),
+        description: text(item.introduction),
+        playCount: Number(item.listennum) || void 0
       };
     })
   };
+}
+async function getRecommendSheetTags() {
+  const response = await axios.get(
+    "https://c.y.qq.com/splcloud/fcgi-bin/fcg_get_diss_tag_conf.fcg",
+    {
+      params: { format: "json", inCharset: "utf8", outCharset: "utf-8" },
+      headers: { "User-Agent": UA, Referer: "https://y.qq.com/" },
+      timeout: 8e3
+    }
+  );
+  const categories = response.data && response.data.data && response.data.data.categories || [];
+  const groups = categories.map(function(group) {
+    return {
+      title: text(group.categoryGroupName),
+      data: (group.items || []).map(function(item) {
+        return { id: text(item.categoryId), title: text(item.categoryName) };
+      })
+    };
+  }).filter(function(group) {
+    return group.data.length > 0;
+  });
+  return { pinned: [{ id: "10000000", title: "\u5168\u90E8" }], data: groups };
 }
 async function getMusicSheetInfo(sheetItem, page) {
   const currentPage = Math.max(1, Number(page) || 1);
@@ -451,10 +440,10 @@ async function importMusicSheet(urlLike) {
 }
 module.exports = {
   platform: "QQ\u97F3\u4E50",
-  version: "1.2.1",
+  version: "1.3.0",
   srcUrl: "https://droidzf.github.io/musicfree/qq.js",
   author: "zero",
-  description: "\u72EC\u7ACB QQ \u97F3\u4E50\u63D2\u4EF6\uFF1A\u641C\u7D22\u3001\u64AD\u653E\u3001\u6B4C\u8BCD\u300122 \u4E2A\u699C\u5355\u3001\u63A8\u8350\u6B4C\u5355\u3001\u6B4C\u5355\u8BE6\u60C5\u548C\u8BC4\u8BBA\u3002",
+  description: "\u72EC\u7ACB QQ \u97F3\u4E50\u63D2\u4EF6\uFF1A\u641C\u7D22\u3001\u64AD\u653E\u3001\u6B4C\u8BCD\u3001\u5B98\u65B9\u52A8\u6001\u699C\u5355\u3001\u63A8\u8350\u6B4C\u5355\u3001\u6B4C\u5355\u8BE6\u60C5\u548C\u8BC4\u8BBA\u3002",
   cacheControl: "no-store",
   supportedSearchType: ["music"],
   hints: { importMusicSheet: ["\u652F\u6301 QQ \u97F3\u4E50\u6B4C\u5355\u94FE\u63A5\u6216\u7EAF\u6570\u5B57\u6B4C\u5355 ID\u3002"] },
@@ -464,18 +453,9 @@ module.exports = {
   },
   getLyric,
   getMusicInfo,
-  getTopLists: function() {
-    return Promise.resolve(createTopListGroups("qq", TOP_LIST_GROUPS));
-  },
+  getTopLists,
   getTopListDetail,
-  getRecommendSheetTags: function() {
-    return Promise.resolve({
-      pinned: [{ id: "10000000", title: "\u63A8\u8350" }],
-      data: [{ title: "\u6B4C\u5355\u5206\u7C7B", data: SHEET_TAGS.map(function(item) {
-        return { id: item[0], title: item[1] };
-      }) }]
-    });
-  },
+  getRecommendSheetTags,
   getRecommendSheetsByTag,
   getMusicSheetInfo,
   importMusicSheet,

@@ -17,6 +17,15 @@ var require_shared = __commonJS({
     function stripHtml(value) {
       return text2(value).replace(/<[^>]*>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
     }
+    function toHttps2(value, size) {
+      return text2(value).replace(/^http:\/\//i, "https://").replace(/\{size\}/g, text2(size, "400"));
+    }
+    function parseJsonp(value) {
+      const raw = text2(value).trim();
+      const start = raw.indexOf("(");
+      const end = raw.lastIndexOf(")");
+      return JSON.parse(start >= 0 && end > start ? raw.slice(start + 1, end) : raw);
+    }
     function parseDuration2(value) {
       if (typeof value === "number") {
         return value > 1e5 ? Math.floor(value / 1e3) : Math.floor(value);
@@ -120,30 +129,14 @@ var require_shared = __commonJS({
       if (!matches || !matches.length) throw new Error("\u65E0\u6CD5\u8BC6\u522B ID");
       return matches[matches.length - 1];
     }
-    function createTopListGroups2(platformKey, groups) {
-      return groups.map(function(group) {
-        return {
-          title: group.title,
-          data: group.data.map(function(item) {
-            const coverImg = "https://droidzf.github.io/musicfree/covers/" + platformKey + "-" + text2(item[0]) + ".png";
-            return {
-              id: text2(item[0]),
-              bangId: text2(item[0]),
-              title: item[1],
-              description: item[2],
-              coverImg,
-              artwork: coverImg
-            };
-          })
-        };
-      });
-    }
     module2.exports = {
       axios: axios2,
       PAGE_SIZE: PAGE_SIZE2,
       UA: UA2,
       text: text2,
       stripHtml,
+      toHttps: toHttps2,
+      parseJsonp,
       parseDuration: parseDuration2,
       artistNames: artistNames2,
       formatLrcTime,
@@ -151,63 +144,27 @@ var require_shared = __commonJS({
       userVariables: userVariables2,
       resolveMedia: resolveMedia2,
       getComments: getComments2,
-      extractNumericId: extractNumericId2,
-      createTopListGroups: createTopListGroups2
+      extractNumericId: extractNumericId2
     };
   }
 });
 
 // src/netease.js
 var CryptoJS = require("crypto-js");
+var cheerio = require("cheerio");
 var {
   axios,
   PAGE_SIZE,
   UA,
   text,
+  toHttps,
   artistNames,
   parseDuration,
   userVariables,
   resolveMedia,
   getComments,
-  extractNumericId,
-  createTopListGroups
+  extractNumericId
 } = require_shared();
-var TOP_LIST_GROUPS = [
-  {
-    title: "\u5B98\u65B9\u699C",
-    data: [
-      ["19723756", "\u98D9\u5347\u699C", "\u805A\u5408\u7F51\u6613\u4E91\u97F3\u4E50\u8FD1\u671F\u70ED\u5EA6\u5FEB\u901F\u4E0A\u5347\u7684\u6B4C\u66F2\u3002"],
-      ["3778678", "\u70ED\u6B4C\u699C", "\u5448\u73B0\u7F51\u6613\u4E91\u97F3\u4E50\u5F53\u524D\u7EFC\u5408\u70ED\u5EA6\u8F83\u9AD8\u7684\u6B4C\u66F2\u3002"],
-      ["2884035", "\u539F\u521B\u699C", "\u805A\u5408\u7F51\u6613\u4E91\u97F3\u4E50\u5E73\u53F0\u70ED\u95E8\u539F\u521B\u4F5C\u54C1\u3002"],
-      ["3779629", "\u65B0\u6B4C\u699C", "\u6536\u5F55\u8FD1\u671F\u53D1\u5E03\u5E76\u53D7\u5230\u5173\u6CE8\u7684\u65B0\u6B4C\u3002"],
-      ["7785066739", "\u9ED1\u80F6VIP\u70ED\u6B4C\u699C", "\u805A\u5408\u9ED1\u80F6 VIP \u7528\u6237\u5173\u6CE8\u7684\u70ED\u95E8\u6B4C\u66F2\u3002"]
-    ]
-  },
-  {
-    title: "\u66F2\u98CE\u699C",
-    data: [
-      ["991319590", "\u8BF4\u5531\u699C", "\u805A\u5408\u70ED\u95E8\u8BF4\u5531\u4F5C\u54C1\u3002"],
-      ["71384707", "\u53E4\u5178\u699C", "\u805A\u5408\u70ED\u95E8\u53E4\u5178\u97F3\u4E50\u4F5C\u54C1\u3002"],
-      ["5059642708", "\u56FD\u98CE\u699C", "\u805A\u5408\u70ED\u95E8\u56FD\u98CE\u97F3\u4E50\u4F5C\u54C1\u3002"],
-      ["6886768100", "\u4E2D\u6587DJ\u699C", "\u805A\u5408\u70ED\u95E8\u4E2D\u6587 DJ \u4E0E\u821E\u66F2\u4F5C\u54C1\u3002"],
-      ["6723173524", "\u7F51\u7EDC\u70ED\u6B4C\u699C", "\u805A\u5408\u8FD1\u671F\u7F51\u7EDC\u70ED\u95E8\u6B4C\u66F2\u3002"]
-    ]
-  },
-  {
-    title: "\u5730\u533A\u699C",
-    data: [
-      ["745956260", "\u97E9\u8BED\u699C", "\u805A\u5408\u70ED\u95E8\u97E9\u8BED\u6B4C\u66F2\u3002"],
-      ["5059644681", "\u65E5\u8BED\u699C", "\u805A\u5408\u70ED\u95E8\u65E5\u8BED\u6B4C\u66F2\u3002"]
-    ]
-  },
-  {
-    title: "\u7279\u8272\u699C",
-    data: [
-      ["8532443277", "\u86CB\u4ED4\u6D3E\u5BF9\u542C\u6B4C\u699C", "\u805A\u5408\u86CB\u4ED4\u6D3E\u5BF9\u7528\u6237\u5173\u6CE8\u7684\u70ED\u95E8\u6B4C\u66F2\u3002"]
-    ]
-  }
-];
-var SHEET_TAGS = ["\u534E\u8BED", "\u6D41\u884C", "\u6447\u6EDA", "\u6C11\u8C23", "\u7535\u5B50", "\u8BF4\u5531", "\u8F7B\u97F3\u4E50", "\u5F71\u89C6\u539F\u58F0", "ACG", "\u513F\u7AE5"];
 function mapMusic(item) {
   const rid = text(item.id);
   const album = item.al || item.album || {};
@@ -217,9 +174,50 @@ function mapMusic(item) {
     artist: artistNames(item.ar || item.artists),
     album: text(album.name),
     duration: parseDuration(item.dt || item.duration),
-    artwork: text(album.picUrl),
+    artwork: toHttps(album.picUrl),
     sourceRid: rid
   };
+}
+function parsePlayCount(value) {
+  const raw = text(value).trim();
+  const number = Number(raw.replace(/[^\d.]/g, "")) || 0;
+  if (raw.indexOf("\u4EBF") >= 0) return Math.round(number * 1e8);
+  if (raw.indexOf("\u4E07") >= 0) return Math.round(number * 1e4);
+  return number || void 0;
+}
+async function getOfficialHtml(url, params) {
+  const response = await axios.get(url, {
+    params,
+    headers: { "User-Agent": UA, Referer: "https://music.163.com/" },
+    responseType: "text",
+    timeout: 9e3
+  });
+  return text(response.data);
+}
+async function getTopLists() {
+  const $ = cheerio.load(await getOfficialHtml("https://music.163.com/discover/toplist"));
+  const groups = [];
+  $(".n-minelst h2").each(function(_, heading) {
+    const group = { title: $(heading).text().trim(), data: [] };
+    $(heading).next("ul").find("li[data-res-id]").each(function(_2, element) {
+      const item = $(element);
+      const id = text(item.attr("data-res-id"));
+      const coverImg = toHttps(item.find("img").attr("src")).replace(
+        /\?param=\d+y\d+$/,
+        "?param=300y300"
+      );
+      group.data.push({
+        id,
+        bangId: id,
+        title: item.find(".name a").text().trim(),
+        description: item.find(".s-fc4").text().trim(),
+        coverImg,
+        artwork: coverImg
+      });
+    });
+    if (group.data.length) groups.push(group);
+  });
+  return groups;
 }
 function encryptEapi(path, payload) {
   const key = text(userVariables().neteaseEapiKey).trim();
@@ -309,7 +307,7 @@ async function playlistPage(sheetItem, page, resultKey) {
     musicList: tracks.map(mapMusic)
   };
   if (currentPage === 1) {
-    const coverImg = text(sheetItem.coverImg || sheetItem.artwork) || text(playlist.coverImgUrl);
+    const coverImg = toHttps(sheetItem.coverImg || sheetItem.artwork) || toHttps(playlist.coverImgUrl);
     result[resultKey] = {
       title: text(playlist.name || sheetItem.title),
       coverImg,
@@ -324,35 +322,55 @@ async function playlistPage(sheetItem, page, resultKey) {
 }
 async function getRecommendSheetsByTag(tag, page) {
   const currentPage = Math.max(1, Number(page) || 1);
-  const category = text(tag && (tag.id || tag.title), "\u534E\u8BED");
-  const response = await axios.get("https://music.haitangw.cc/music/gedan/wy.php", {
-    params: {
-      type: "getCategoryList",
+  const category = text(tag && (tag.id || tag.title), "\u5168\u90E8");
+  const pageSize = 35;
+  const $ = cheerio.load(
+    await getOfficialHtml("https://music.163.com/discover/playlist/", {
+      order: "hot",
       cat: category,
-      page: currentPage,
-      limit: 15,
-      order: "hot"
-    },
-    timeout: 8e3
-  });
-  const root = response.data || {};
-  if (Number(root.code) !== 200) throw new Error(root.msg || "\u7F51\u6613\u4E91\u6B4C\u5355\u52A0\u8F7D\u5931\u8D25");
-  const data = root.data || {};
-  const list = data.data || [];
-  return {
-    isEnd: currentPage * 15 >= Number(data.total || 0) || list.length < 15,
-    data: list.map(function(item) {
-      return {
-        id: text(item.id),
-        title: text(item.name),
-        artist: text(item.uname || item.author),
-        artwork: text(item.img),
-        description: text(item.desc),
-        worksNum: Number(item.total) || void 0,
-        playCount: Number(item.listencnt) || void 0
-      };
+      limit: pageSize,
+      offset: (currentPage - 1) * pageSize
     })
+  );
+  const list = [];
+  $("#m-pl-container > li").each(function(_, element) {
+    const item = $(element);
+    const link = item.find("a.msk").first();
+    const match = text(link.attr("href")).match(/[?&]id=(\d+)/);
+    if (!match) return;
+    list.push({
+      id: match[1],
+      title: text(link.attr("title") || item.find("a.tit").text()),
+      artist: item.find("a.nm").first().text().trim(),
+      artwork: toHttps(item.find(".u-cover img").attr("src")).replace(
+        /\?param=\d+y\d+$/,
+        "?param=300y300"
+      ),
+      playCount: parsePlayCount(item.find(".nb").text())
+    });
+  });
+  return {
+    isEnd: $("a.zbtn.znxt").length === 0,
+    data: list
   };
+}
+async function getRecommendSheetTags() {
+  const $ = cheerio.load(
+    await getOfficialHtml("https://music.163.com/discover/playlist/", {
+      order: "hot",
+      cat: "\u5168\u90E8"
+    })
+  );
+  const groups = [];
+  $("#cateListBox dl").each(function(_, element) {
+    const group = { title: $(element).find("dt").text().trim(), data: [] };
+    $(element).find("dd a[data-cat]").each(function(_2, link) {
+      const title = text($(link).attr("data-cat") || $(link).text());
+      group.data.push({ id: title, title });
+    });
+    if (group.data.length) groups.push(group);
+  });
+  return { pinned: [{ id: "\u5168\u90E8", title: "\u5168\u90E8" }], data: groups };
 }
 async function getMusicInfo(musicItem) {
   const rid = text(musicItem.sourceRid || musicItem.id);
@@ -379,7 +397,7 @@ async function importMusicSheet(urlLike) {
 }
 module.exports = {
   platform: "\u7F51\u6613\u4E91\u97F3\u4E50",
-  version: "1.2.1",
+  version: "1.3.0",
   srcUrl: "https://droidzf.github.io/musicfree/netease.js",
   author: "zero",
   description: "\u72EC\u7ACB\u7F51\u6613\u4E91\u97F3\u4E50\u63D2\u4EF6\uFF1A\u641C\u7D22\u3001\u64AD\u653E\u3001\u6B4C\u8BCD\u3001\u699C\u5355\u3001\u63A8\u8350\u6B4C\u5355\u3001\u5B8C\u6574\u6B4C\u5355\u8BE6\u60C5\u548C\u8BC4\u8BBA\u3002",
@@ -399,25 +417,11 @@ module.exports = {
   },
   getLyric,
   getMusicInfo,
-  getTopLists: function() {
-    return Promise.resolve(createTopListGroups("netease", TOP_LIST_GROUPS));
-  },
+  getTopLists,
   getTopListDetail: function(topListItem, page) {
     return playlistPage(topListItem, page, "topListItem");
   },
-  getRecommendSheetTags: function() {
-    return Promise.resolve({
-      pinned: [{ id: "\u534E\u8BED", title: "\u534E\u8BED" }],
-      data: [
-        {
-          title: "\u6B4C\u5355\u5206\u7C7B",
-          data: SHEET_TAGS.map(function(tag) {
-            return { id: tag, title: tag };
-          })
-        }
-      ]
-    });
-  },
+  getRecommendSheetTags,
   getRecommendSheetsByTag,
   getMusicSheetInfo: function(sheetItem, page) {
     return playlistPage(sheetItem, page, "sheetItem");

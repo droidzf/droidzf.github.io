@@ -17,6 +17,15 @@ var require_shared = __commonJS({
     function stripHtml2(value) {
       return text2(value).replace(/<[^>]*>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
     }
+    function toHttps2(value, size) {
+      return text2(value).replace(/^http:\/\//i, "https://").replace(/\{size\}/g, text2(size, "400"));
+    }
+    function parseJsonp(value) {
+      const raw = text2(value).trim();
+      const start = raw.indexOf("(");
+      const end = raw.lastIndexOf(")");
+      return JSON.parse(start >= 0 && end > start ? raw.slice(start + 1, end) : raw);
+    }
     function parseDuration2(value) {
       if (typeof value === "number") {
         return value > 1e5 ? Math.floor(value / 1e3) : Math.floor(value);
@@ -120,30 +129,14 @@ var require_shared = __commonJS({
       if (!matches || !matches.length) throw new Error("\u65E0\u6CD5\u8BC6\u522B ID");
       return matches[matches.length - 1];
     }
-    function createTopListGroups2(platformKey, groups) {
-      return groups.map(function(group) {
-        return {
-          title: group.title,
-          data: group.data.map(function(item) {
-            const coverImg = "https://droidzf.github.io/musicfree/covers/" + platformKey + "-" + text2(item[0]) + ".png";
-            return {
-              id: text2(item[0]),
-              bangId: text2(item[0]),
-              title: item[1],
-              description: item[2],
-              coverImg,
-              artwork: coverImg
-            };
-          })
-        };
-      });
-    }
     module2.exports = {
       axios: axios2,
       PAGE_SIZE: PAGE_SIZE2,
       UA: UA2,
       text: text2,
       stripHtml: stripHtml2,
+      toHttps: toHttps2,
+      parseJsonp,
       parseDuration: parseDuration2,
       artistNames,
       formatLrcTime,
@@ -151,115 +144,25 @@ var require_shared = __commonJS({
       userVariables,
       resolveMedia: resolveMedia2,
       getComments: getComments2,
-      extractNumericId: extractNumericId2,
-      createTopListGroups: createTopListGroups2
+      extractNumericId: extractNumericId2
     };
   }
 });
 
 // src/kugou.js
+var cheerio = require("cheerio");
 var {
   axios,
   PAGE_SIZE,
   UA,
   text,
   stripHtml,
+  toHttps,
   parseDuration,
   resolveMedia,
   getComments,
-  extractNumericId,
-  createTopListGroups
+  extractNumericId
 } = require_shared();
-var TOP_LIST_GROUPS = [
-  {
-    title: "\u5DC5\u5CF0\u699C",
-    data: [
-      ["8888", "TOP500", "\u9177\u72D7\u97F3\u4E50\u7EFC\u5408\u70ED\u5EA6 TOP500\u3002"],
-      ["6666", "\u98D9\u5347\u699C", "\u805A\u5408\u8FD1\u671F\u70ED\u5EA6\u5FEB\u901F\u4E0A\u5347\u7684\u6B4C\u66F2\u3002"],
-      ["59703", "\u8702\u9E1F\u6D41\u884C\u97F3\u4E50\u699C", "\u5448\u73B0\u8702\u9E1F\u97F3\u4E50\u4F53\u7CFB\u4E2D\u7684\u6D41\u884C\u70ED\u6B4C\u3002"],
-      ["52144", "\u6296\u97F3\u70ED\u6B4C\u699C", "\u6536\u5F55\u6296\u97F3\u8FD1\u671F\u70ED\u95E8\u97F3\u4E50\u3002"],
-      ["52767", "\u5FEB\u624B\u70ED\u6B4C\u699C", "\u6536\u5F55\u5FEB\u624B\u8FD1\u671F\u70ED\u95E8\u97F3\u4E50\u3002"]
-    ]
-  },
-  {
-    title: "\u66F2\u98CE\u699C",
-    data: [
-      ["24971", "DJ\u70ED\u6B4C\u699C", "\u805A\u5408\u70ED\u95E8 DJ \u4E0E\u821E\u66F2\u4F5C\u54C1\u3002"],
-      ["23784", "\u7F51\u7EDC\u7EA2\u6B4C\u699C", "\u805A\u5408\u8FD1\u671F\u7F51\u7EDC\u70ED\u95E8\u6B4C\u66F2\u3002"],
-      ["44412", "\u8BF4\u5531\u5148\u950B\u699C", "\u805A\u5408\u70ED\u95E8\u8BF4\u5531\u4E0E\u5148\u950B\u4F5C\u54C1\u3002"],
-      ["33160", "\u7535\u97F3\u699C", "\u805A\u5408\u70ED\u95E8\u7535\u5B50\u97F3\u4E50\u4F5C\u54C1\u3002"],
-      ["51341", "\u6C11\u8C23\u699C", "\u805A\u5408\u70ED\u95E8\u6C11\u8C23\u4F5C\u54C1\u3002"],
-      ["33162", "ACG\u65B0\u6B4C\u699C", "\u6536\u5F55\u8FD1\u671F\u70ED\u95E8 ACG \u65B0\u6B4C\u3002"],
-      ["33165", "\u7CA4\u8BED\u91D1\u66F2\u699C", "\u805A\u5408\u70ED\u95E8\u7CA4\u8BED\u91D1\u66F2\u3002"],
-      ["33166", "\u6B27\u7F8E\u91D1\u66F2\u699C", "\u805A\u5408\u6B27\u7F8E\u7ECF\u5178\u4E0E\u70ED\u95E8\u91D1\u66F2\u3002"],
-      ["33163", "\u5F71\u89C6\u91D1\u66F2\u699C", "\u805A\u5408\u5F71\u89C6\u5267\u4E0E\u7EFC\u827A\u539F\u58F0\u91D1\u66F2\u3002"],
-      ["51340", "\u4F24\u611F\u699C", "\u805A\u5408\u4F24\u611F\u6C1B\u56F4\u70ED\u95E8\u6B4C\u66F2\u3002"],
-      ["59895", "R&B\u699C", "\u805A\u5408\u70ED\u95E8 R&B \u4F5C\u54C1\u3002"],
-      ["59896", "\u6447\u6EDA\u699C", "\u805A\u5408\u70ED\u95E8\u6447\u6EDA\u4F5C\u54C1\u3002"],
-      ["59897", "\u7235\u58EB\u699C", "\u805A\u5408\u70ED\u95E8\u7235\u58EB\u4F5C\u54C1\u3002"],
-      ["59898", "\u4E61\u6751\u97F3\u4E50\u699C", "\u805A\u5408\u70ED\u95E8\u4E61\u6751\u97F3\u4E50\u3002"],
-      ["59900", "\u7EAF\u97F3\u4E50\u699C", "\u805A\u5408\u70ED\u95E8\u7EAF\u97F3\u4E50\u4F5C\u54C1\u3002"],
-      ["59899", "\u53E4\u5178\u699C", "\u805A\u5408\u70ED\u95E8\u53E4\u5178\u97F3\u4E50\u4F5C\u54C1\u3002"],
-      ["33161", "\u53E4\u98CE\u65B0\u6B4C\u699C", "\u6536\u5F55\u8FD1\u671F\u70ED\u95E8\u53E4\u98CE\u65B0\u6B4C\u3002"]
-    ]
-  },
-  {
-    title: "\u5730\u533A\u699C",
-    data: [
-      ["31308", "\u5185\u5730\u699C", "\u805A\u5408\u4E2D\u56FD\u5185\u5730\u70ED\u95E8\u6B4C\u66F2\u3002"],
-      ["31313", "\u9999\u6E2F\u5730\u533A\u699C", "\u805A\u5408\u4E2D\u56FD\u9999\u6E2F\u5730\u533A\u70ED\u95E8\u6B4C\u66F2\u3002"],
-      ["54848", "\u53F0\u6E7E\u5730\u533A\u699C", "\u805A\u5408\u4E2D\u56FD\u53F0\u6E7E\u5730\u533A\u70ED\u95E8\u6B4C\u66F2\u3002"],
-      ["31310", "\u6B27\u7F8E\u699C", "\u805A\u5408\u6B27\u7F8E\u5730\u533A\u70ED\u95E8\u6B4C\u66F2\u3002"],
-      ["31311", "\u97E9\u56FD\u699C", "\u805A\u5408\u97E9\u56FD\u70ED\u95E8\u6B4C\u66F2\u3002"],
-      ["31312", "\u65E5\u672C\u699C", "\u805A\u5408\u65E5\u672C\u70ED\u95E8\u6B4C\u66F2\u3002"],
-      ["60170", "\u95FD\u5357\u8BED\u699C", "\u805A\u5408\u70ED\u95E8\u95FD\u5357\u8BED\u6B4C\u66F2\u3002"],
-      ["36107", "\u5C0F\u8BED\u79CD\u70ED\u6B4C\u699C", "\u805A\u5408\u591A\u8BED\u79CD\u70ED\u95E8\u6B4C\u66F2\u3002"],
-      ["60171", "\u8D8A\u5357\u8BED\u699C", "\u805A\u5408\u70ED\u95E8\u8D8A\u5357\u8BED\u6B4C\u66F2\u3002"],
-      ["60172", "\u6CF0\u8BED\u699C", "\u805A\u5408\u70ED\u95E8\u6CF0\u8BED\u6B4C\u66F2\u3002"]
-    ]
-  },
-  {
-    title: "\u5E74\u4EE3\u699C",
-    data: [
-      ["49225", "80\u540E\u70ED\u6B4C\u699C", "\u805A\u5408\u6DF1\u53D7 80 \u540E\u542C\u4F17\u559C\u7231\u7684\u6B4C\u66F2\u3002"],
-      ["49223", "90\u540E\u70ED\u6B4C\u699C", "\u805A\u5408\u6DF1\u53D7 90 \u540E\u542C\u4F17\u559C\u7231\u7684\u6B4C\u66F2\u3002"],
-      ["49224", "00\u540E\u70ED\u6B4C\u699C", "\u805A\u5408\u6DF1\u53D7 00 \u540E\u542C\u4F17\u559C\u7231\u7684\u6B4C\u66F2\u3002"]
-    ]
-  },
-  {
-    title: "\u7279\u8272\u699C",
-    data: [
-      ["35811", "\u4F1A\u5458\u4E13\u4EAB\u699C", "\u805A\u5408\u9177\u72D7\u4F1A\u5458\u5173\u6CE8\u7684\u70ED\u95E8\u4F5C\u54C1\u3002"],
-      ["37361", "\u96F7\u8FBE\u699C", "\u57FA\u4E8E\u5E73\u53F0\u8D8B\u52BF\u53D1\u73B0\u7684\u6F5C\u529B\u70ED\u6B4C\u3002"],
-      ["21101", "\u5206\u4EAB\u699C", "\u6309\u7528\u6237\u5206\u4EAB\u70ED\u5EA6\u6574\u7406\u7684\u6B4C\u66F2\u3002"],
-      ["46910", "\u7EFC\u827A\u65B0\u6B4C\u699C", "\u6536\u5F55\u8FD1\u671F\u7EFC\u827A\u8282\u76EE\u70ED\u95E8\u65B0\u6B4C\u3002"],
-      ["30972", "\u9177\u72D7\u97F3\u4E50\u4EBA\u539F\u521B\u699C", "\u805A\u5408\u9177\u72D7\u97F3\u4E50\u4EBA\u539F\u521B\u4F5C\u54C1\u3002"],
-      ["65234", "\u513F\u6B4C\u699C", "\u805A\u5408\u70ED\u95E8\u513F\u7AE5\u6B4C\u66F2\u3002"],
-      ["22603", "5sing\u97F3\u4E50\u699C", "\u805A\u5408 5sing \u5E73\u53F0\u70ED\u95E8\u97F3\u4E50\u3002"],
-      ["21335", "\u7E41\u661F\u97F3\u4E50\u699C", "\u805A\u5408\u7E41\u661F\u97F3\u4E50\u70ED\u95E8\u4F5C\u54C1\u3002"]
-    ]
-  },
-  {
-    title: "\u5168\u7403\u699C",
-    data: [
-      ["4681", "\u7F8E\u56FDBillBoard\u699C", "\u6536\u5F55\u7F8E\u56FD Billboard \u70ED\u95E8\u4F5C\u54C1\u3002"],
-      ["25028", "Beatport\u7535\u5B50\u821E\u66F2\u699C", "\u6536\u5F55 Beatport \u70ED\u95E8\u7535\u5B50\u821E\u66F2\u3002"],
-      ["4680", "\u82F1\u56FD\u5355\u66F2\u699C", "\u6536\u5F55\u82F1\u56FD\u70ED\u95E8\u5355\u66F2\u3002"],
-      ["38623", "\u97E9\u56FDMelon\u97F3\u4E50\u699C", "\u6536\u5F55\u97E9\u56FD Melon \u70ED\u95E8\u97F3\u4E50\u3002"],
-      ["42807", "joox\u672C\u5730\u70ED\u6B4C\u699C", "\u6536\u5F55 JOOX \u672C\u5730\u70ED\u95E8\u6B4C\u66F2\u3002"],
-      ["4673", "\u65E5\u672C\u516C\u4FE1\u699C", "\u6536\u5F55\u65E5\u672C\u516C\u4FE1\u699C\u70ED\u95E8\u4F5C\u54C1\u3002"],
-      ["46868", "\u65E5\u672CSPACE SHOWER\u699C", "\u6536\u5F55 SPACE SHOWER \u70ED\u95E8\u4F5C\u54C1\u3002"],
-      ["42808", "KKBOX\u98CE\u4E91\u699C", "\u6536\u5F55 KKBOX \u98CE\u4E91\u70ED\u95E8\u4F5C\u54C1\u3002"]
-    ]
-  }
-];
-var SHEET_TAGS = [
-  ["5", "\u63A8\u8350"],
-  ["6", "\u6700\u70ED"],
-  ["7", "\u6700\u65B0"],
-  ["3", "\u70ED\u85CF"],
-  ["8", "\u98D9\u5347"]
-];
 function splitFilename(value) {
   const raw = stripHtml(value);
   const index = raw.indexOf(" - ");
@@ -269,9 +172,10 @@ function splitFilename(value) {
 function mapMusic(item) {
   const rid = text(item.hash || item.FileHash || item.Hash || item.HASH);
   const names = splitFilename(item.filename || item.FileName || item.SongName || item.songname);
-  const cover = text(
-    item.album_sizable_cover || item.Image || item.image || item.trans_param && item.trans_param.union_cover
-  ).replace("{size}", "400");
+  const cover = toHttps(
+    item.album_sizable_cover || item.Image || item.image || item.trans_param && item.trans_param.union_cover,
+    "400"
+  );
   return {
     id: rid,
     title: stripHtml(item.songname || item.SongName || names.title),
@@ -281,6 +185,48 @@ function mapMusic(item) {
     artwork: cover,
     sourceRid: rid
   };
+}
+async function getTopLists() {
+  const response = await axios.get("http://mobilecdnbj.kugou.com/api/v3/rank/list", {
+    params: {
+      version: 9108,
+      plat: 0,
+      showtype: 2,
+      parentid: 0,
+      apiver: 6,
+      area_code: 1,
+      withsong: 0,
+      with_res_tag: 0
+    },
+    headers: { "User-Agent": UA, Referer: "https://www.kugou.com/" },
+    timeout: 9e3
+  });
+  const list = response.data && response.data.data && response.data.data.info || [];
+  const groups = [
+    { title: "\u70ED\u95E8\u699C\u5355", classify: [1, 2], data: [] },
+    { title: "\u7279\u8272\u97F3\u4E50\u699C", classify: [3, 5], data: [] },
+    { title: "\u5168\u7403\u699C", classify: [4], data: [] }
+  ];
+  list.forEach(function(item) {
+    const group = groups.find(function(candidate) {
+      return candidate.classify.indexOf(Number(item.classify)) >= 0;
+    });
+    if (!group) return;
+    const coverImg = toHttps(
+      item.img_cover || item.imgurl || item.banner7url || item.bannerurl,
+      "400"
+    );
+    group.data.push({
+      id: text(item.rankid),
+      bangId: text(item.rankid),
+      title: text(item.rankname),
+      description: text(item.intro),
+      coverImg,
+      artwork: coverImg,
+      updateTime: text(item.rank_id_publish_date || item.update_frequency)
+    });
+  });
+  return groups;
 }
 async function search(query, page, type) {
   if (type !== "music") return { isEnd: true, data: [] };
@@ -369,33 +315,52 @@ async function getTopListDetail(topListItem, page) {
 }
 async function getRecommendSheetsByTag(tag, page) {
   const currentPage = Math.max(1, Number(page) || 1);
-  const response = await axios.get("http://www2.kugou.kugou.com/yueku/v9/special/getSpecial", {
-    params: {
-      is_ajax: 1,
-      cdn: "cdn",
-      t: text(tag && tag.id, "5"),
-      c: "",
-      p: currentPage
-    },
+  const tagId = text(tag && tag.id, "5");
+  const response = await axios.get(
+    "https://www.kugou.com/yy/special/index/" + currentPage + "-" + encodeURIComponent(tagId) + "-" + (currentPage === 1 ? "0" : "1") + ".html",
+    {
+      headers: { "User-Agent": UA, Referer: "https://www.kugou.com/" },
+      responseType: "text",
+      timeout: 8e3
+    }
+  );
+  const $ = cheerio.load(text(response.data));
+  const list = [];
+  $("#ulAlbums > li").each(function(_, element) {
+    const share = $(element).find("a.pc_temp_bicon_share").first();
+    const play = $(element).find("a.pc_temp_bicon_play").first();
+    if (!share.attr("data-id")) return;
+    list.push({
+      id: text(share.attr("data-id")),
+      title: text(share.attr("data-collection") || $(element).find(".top strong a").text()),
+      artist: text(share.attr("data-creat")).replace(/^制作人：/, ""),
+      artwork: toHttps(share.attr("data-img")),
+      description: $(element).find(".detail .text").text().trim(),
+      globalCollectionId: text(play.attr("data-egcid"))
+    });
+  });
+  return {
+    isEnd: $('a[title="\u4E0B\u4E00\u9875"]').length === 0,
+    data: list
+  };
+}
+async function getRecommendSheetTags() {
+  const response = await axios.get("https://www.kugou.com/yy/html/special.html", {
     headers: { "User-Agent": UA, Referer: "https://www.kugou.com/" },
+    responseType: "text",
     timeout: 8e3
   });
-  const list = response.data && response.data.special_db || [];
-  return {
-    isEnd: list.length < 20,
-    data: list.map(function(item) {
-      return {
-        id: text(item.specialid),
-        title: text(item.specialname),
-        artist: text(item.nickname || item.author),
-        artwork: text(item.img).replace("{size}", "400"),
-        description: text(item.intro),
-        worksNum: Number(item.song_count) || void 0,
-        playCount: Number(text(item.total_play_count).replace(/[^\d.]/g, "")) || void 0,
-        globalCollectionId: text(item.global_collection_id)
-      };
-    })
-  };
+  const $ = cheerio.load(text(response.data));
+  const tags = [];
+  $('a[href*="/yy/special/index/1-"]').each(function(_, element) {
+    const href = text($(element).attr("href"));
+    const match = href.match(/\/index\/1-(\d+)-0\.html/);
+    if (!match || tags.some(function(item) {
+      return item.id === match[1];
+    })) return;
+    tags.push({ id: match[1], title: text($(element).attr("title") || $(element).text()) });
+  });
+  return { pinned: tags.slice(0, 1), data: [{ title: "\u6B4C\u5355\u5206\u7C7B", data: tags }] };
 }
 function parseEmbeddedSongs(html) {
   const match = text(html).match(/var data=(\[[\s\S]*?\])\s*,\s*specialData\s*=/);
@@ -404,58 +369,40 @@ function parseEmbeddedSongs(html) {
 }
 async function getMusicSheetInfo(sheetItem, page) {
   const currentPage = Math.max(1, Number(page) || 1);
+  if (currentPage > 1) return { isEnd: true, musicList: [] };
   const base = "https://m.kugou.com/plist/list/" + encodeURIComponent(sheetItem.id) + "/";
-  if (currentPage === 1) {
-    const response2 = await axios.get(base, {
-      params: { json: "true" },
-      headers: { "User-Agent": UA, Referer: "https://m.kugou.com/" },
-      timeout: 9e3
-    });
-    const root = response2.data || {};
-    const listRoot = root.list && root.list.list || {};
-    const info = root.info && root.info.list;
-    const songs = listRoot.info || [];
-    return {
-      isEnd: Number(listRoot.total || 0) <= songs.length,
-      musicList: songs.map(mapMusic),
-      sheetItem: info ? {
-        title: text(info.specialname || sheetItem.title),
-        artist: text(info.nickname),
-        artwork: text(info.imgurl).replace("{size}", "400"),
-        description: text(info.intro),
-        worksNum: Number(info.songcount) || void 0,
-        playCount: Number(info.playcount) || void 0
-      } : void 0
-    };
-  }
-  const response = await axios.get(base + "?json=true&page=" + currentPage, {
+  const response = await axios.get(base + "?json=true&page=2", {
     headers: { "User-Agent": UA, Referer: "https://m.kugou.com/" },
     responseType: "text",
     timeout: 9e3
   });
-  const allSongs = parseEmbeddedSongs(response.data);
-  const start = (currentPage - 1) * 10;
-  const pageSongs = allSongs.slice(start, start + 10);
-  return { isEnd: start + pageSongs.length >= allSongs.length, musicList: pageSongs.map(mapMusic) };
+  const root = response.data || {};
+  const listRoot = typeof root === "object" && root.list && root.list.list;
+  const info = typeof root === "object" && root.info && root.info.list;
+  const allSongs = listRoot ? listRoot.info || [] : parseEmbeddedSongs(root);
+  return {
+    isEnd: true,
+    musicList: allSongs.map(mapMusic),
+    sheetItem: {
+      title: text(info && info.specialname || sheetItem.title),
+      artist: text(info && info.nickname || sheetItem.artist),
+      artwork: toHttps(info && info.imgurl || sheetItem.artwork, "400"),
+      description: text(info && info.intro || sheetItem.description),
+      worksNum: Number(info && info.songcount) || allSongs.length,
+      playCount: Number(info && info.playcount) || sheetItem.playCount || void 0
+    }
+  };
 }
 async function importMusicSheet(urlLike) {
   const id = extractNumericId(urlLike);
-  const response = await axios.get(
-    "https://m.kugou.com/plist/list/" + encodeURIComponent(id) + "/?json=true&page=2",
-    {
-      headers: { "User-Agent": UA, Referer: "https://m.kugou.com/" },
-      responseType: "text",
-      timeout: 9e3
-    }
-  );
-  return parseEmbeddedSongs(response.data).map(mapMusic);
+  return (await getMusicSheetInfo({ id, title: "\u5BFC\u5165\u6B4C\u5355" }, 1)).musicList;
 }
 module.exports = {
   platform: "\u9177\u72D7\u97F3\u4E50",
-  version: "1.2.1",
+  version: "1.3.0",
   srcUrl: "https://droidzf.github.io/musicfree/kugou.js",
   author: "zero",
-  description: "\u72EC\u7ACB\u9177\u72D7\u97F3\u4E50\u63D2\u4EF6\uFF1A\u641C\u7D22\u3001\u64AD\u653E\u3001\u6B4C\u8BCD\u300151 \u4E2A\u699C\u5355\u3001\u63A8\u8350\u6B4C\u5355\u3001\u6B4C\u5355\u8BE6\u60C5\u548C\u8BC4\u8BBA\u3002",
+  description: "\u72EC\u7ACB\u9177\u72D7\u97F3\u4E50\u63D2\u4EF6\uFF1A\u641C\u7D22\u3001\u64AD\u653E\u3001\u6B4C\u8BCD\u3001\u5B98\u65B9\u52A8\u6001\u699C\u5355\u3001\u63A8\u8350\u6B4C\u5355\u3001\u6B4C\u5355\u8BE6\u60C5\u548C\u8BC4\u8BBA\u3002",
   cacheControl: "no-store",
   supportedSearchType: ["music"],
   hints: { importMusicSheet: ["\u652F\u6301\u9177\u72D7\u6B4C\u5355\u94FE\u63A5\u6216\u7EAF\u6570\u5B57\u6B4C\u5355 ID\u3002"] },
@@ -465,23 +412,9 @@ module.exports = {
   },
   getLyric,
   getMusicInfo,
-  getTopLists: function() {
-    return Promise.resolve(createTopListGroups("kugou", TOP_LIST_GROUPS));
-  },
+  getTopLists,
   getTopListDetail,
-  getRecommendSheetTags: function() {
-    return Promise.resolve({
-      pinned: [{ id: "5", title: "\u63A8\u8350" }],
-      data: [
-        {
-          title: "\u6B4C\u5355\u5206\u7C7B",
-          data: SHEET_TAGS.map(function(item) {
-            return { id: item[0], title: item[1] };
-          })
-        }
-      ]
-    });
-  },
+  getRecommendSheetTags,
   getRecommendSheetsByTag,
   getMusicSheetInfo,
   importMusicSheet,
