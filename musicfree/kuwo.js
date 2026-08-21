@@ -165,6 +165,7 @@ var {
 } = require_shared();
 var KUWO_PC_PRODUCT = "kwplayer_pc_9.0.5.0";
 var KUWO_APP_UID = "76039576";
+var UNSUPPORTED_RECOMMEND_TAG_IDS = /* @__PURE__ */ new Set(["18", "20", "241"]);
 var recommendTagCache;
 var recommendTagCacheAt = 0;
 async function getKuwoRecommendTagGroups() {
@@ -345,6 +346,7 @@ async function getRecommendSheetsByTag(tag, page) {
     const seen = /* @__PURE__ */ new Set();
     const allSheets = [];
     groups.forEach(function(group) {
+      if (/^分类/.test(text(group.label))) return;
       const list2 = Array.isArray(group.list) ? group.list : [];
       list2.forEach(function(item) {
         const id = text(item.id);
@@ -426,7 +428,9 @@ async function getRecommendSheetTags() {
     }).map(function(group) {
       return {
         title: text(group.name),
-        data: group.data.map(function(item) {
+        data: group.data.filter(function(item) {
+          return !UNSUPPORTED_RECOMMEND_TAG_IDS.has(text(item.id));
+        }).map(function(item) {
           return {
             id: text(item.id),
             title: text(item.name),
@@ -434,6 +438,8 @@ async function getRecommendSheetTags() {
           };
         })
       };
+    }).filter(function(group) {
+      return group.data.length > 0;
     })
   };
 }
@@ -443,7 +449,7 @@ async function importMusicSheet(urlLike) {
 }
 module.exports = {
   platform: "\u9177\u6211\u97F3\u4E50",
-  version: "1.3.3",
+  version: "1.3.4",
   srcUrl: "https://droidzf.github.io/musicfree/kuwo.js",
   author: "zero",
   description: "\u72EC\u7ACB\u9177\u6211\u97F3\u4E50\u63D2\u4EF6\uFF1A\u641C\u7D22\u3001\u64AD\u653E\u3001\u6B4C\u8BCD\u3001\u699C\u5355\u3001\u63A8\u8350\u6B4C\u5355\u3001\u6B4C\u5355\u8BE6\u60C5\u548C\u8BC4\u8BBA\u3002",
