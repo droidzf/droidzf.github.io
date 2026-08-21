@@ -165,7 +165,6 @@ var {
 } = require_shared();
 var cheerio = require("cheerio");
 var KUWO_SECRET_COOKIE = "Hm_Iuvt_cdb524f42f23cer9b268564v7y735ewrq2324";
-var KUWO_SECRET_TOKEN = "MusicFreeOfficialDataClient";
 function createKuwoSecret(token, key) {
   let digits = "";
   for (let index = 0; index < key.length; index += 1) {
@@ -194,10 +193,25 @@ function createKuwoSecret(token, key) {
   while (suffix.length < 8) suffix = "0" + suffix;
   return result + suffix;
 }
-function kuwoWebHeaders() {
+function extractKuwoSession(response) {
+  const headers = response && response.headers || {};
+  const rawCookie = headers["set-cookie"] || headers["Set-Cookie"] || "";
+  const cookieText = Array.isArray(rawCookie) ? rawCookie.join(";") : text(rawCookie);
+  const match = new RegExp(KUWO_SECRET_COOKIE + "=([^;]+)", "i").exec(cookieText);
+  return match ? match[1] : "";
+}
+function createKuwoSessionToken() {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let token = "";
+  for (let index = 0; index < 32; index += 1) {
+    token += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
+  }
+  return token;
+}
+function kuwoWebHeaders(token) {
   return {
-    Secret: createKuwoSecret(KUWO_SECRET_TOKEN, KUWO_SECRET_COOKIE),
-    Cookie: KUWO_SECRET_COOKIE + "=" + KUWO_SECRET_TOKEN,
+    Secret: createKuwoSecret(token, KUWO_SECRET_COOKIE),
+    Cookie: KUWO_SECRET_COOKIE + "=" + token,
     Referer: "https://www.kuwo.cn/playlists",
     "User-Agent": UA
   };
@@ -364,6 +378,7 @@ async function getKuwoPlaylistPageData() {
   if (!parsed.playList.length || !parsed.tagList.length) {
     throw new Error("\u9177\u6211\u5B98\u65B9\u63A8\u8350\u6B4C\u5355\u4E3A\u7A7A");
   }
+  parsed.sessionToken = extractKuwoSession(response) || createKuwoSessionToken();
   playlistPageCache = parsed;
   playlistPageCacheAt = now;
   return parsed;
@@ -503,19 +518,20 @@ async function getRecommendSheetsByTag(tag, page) {
   const currentPage = Math.max(1, Number(page) || 1);
   const tagId = text(tag && tag.id, "__recommend__");
   if (tagId === "__recommend__" && currentPage === 1) {
-    const officialPage = await getKuwoPlaylistPageData();
+    const officialPage2 = await getKuwoPlaylistPageData();
     return {
-      isEnd: officialPage.playList.length < 20 || officialPage.playList.length >= officialPage.total,
-      data: officialPage.playList.map(mapRecommendSheet)
+      isEnd: officialPage2.playList.length < 20 || officialPage2.playList.length >= officialPage2.total,
+      data: officialPage2.playList.map(mapRecommendSheet)
     };
   }
+  const officialPage = await getKuwoPlaylistPageData();
   const endpoint = tagId === "__recommend__" ? "https://www.kuwo.cn/api/www/classify/playlist/getRcmPlayList" : "https://www.kuwo.cn/api/www/classify/playlist/getTagPlayList";
   const params = { pn: currentPage, rn: 20, httpsStatus: 1, plat: "web_www" };
   if (tagId === "__recommend__") params.order = "new";
   else params.id = tagId;
   const response = await axios.get(endpoint, {
     params,
-    headers: kuwoWebHeaders(),
+    headers: kuwoWebHeaders(officialPage.sessionToken),
     timeout: 8e3
   });
   const data = response.data && response.data.data || {};
@@ -583,7 +599,7 @@ async function importMusicSheet(urlLike) {
 }
 module.exports = {
   platform: "\u9177\u6211\u97F3\u4E50",
-  version: "1.3.1",
+  version: "1.3.2",
   srcUrl: "https://droidzf.github.io/musicfree/kuwo.js",
   author: "zero",
   description: "\u72EC\u7ACB\u9177\u6211\u97F3\u4E50\u63D2\u4EF6\uFF1A\u641C\u7D22\u3001\u64AD\u653E\u3001\u6B4C\u8BCD\u3001\u699C\u5355\u3001\u63A8\u8350\u6B4C\u5355\u3001\u6B4C\u5355\u8BE6\u60C5\u548C\u8BC4\u8BBA\u3002",

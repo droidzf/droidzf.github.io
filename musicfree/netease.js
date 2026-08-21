@@ -58,7 +58,7 @@ var require_shared = __commonJS({
         return text2(value);
       }
     }
-    function userVariables2() {
+    function userVariables() {
       try {
         return env.getUserVariables() || {};
       } catch (error) {
@@ -141,7 +141,7 @@ var require_shared = __commonJS({
       artistNames: artistNames2,
       formatLrcTime,
       decodeBase64,
-      userVariables: userVariables2,
+      userVariables,
       resolveMedia: resolveMedia2,
       getComments: getComments2,
       extractNumericId: extractNumericId2
@@ -160,11 +160,11 @@ var {
   toHttps,
   artistNames,
   parseDuration,
-  userVariables,
   resolveMedia,
   getComments,
   extractNumericId
 } = require_shared();
+var NETEASE_EAPI_KEY = "e82ckenh8dichen8";
 function mapMusic(item) {
   const rid = text(item.id);
   const album = item.al || item.album || {};
@@ -220,16 +220,12 @@ async function getTopLists() {
   return groups;
 }
 function encryptEapi(path, payload) {
-  const key = text(userVariables().neteaseEapiKey).trim();
-  if (!key) {
-    throw new Error("\u8BF7\u5148\u5728\u63D2\u4EF6\u8BBE\u7F6E\u4E2D\u586B\u5199\u7F51\u6613\u4E91 EAPI AES Key\uFF1B\u9879\u76EE\u4E0D\u4F1A\u5185\u7F6E APK \u63D0\u53D6\u5BC6\u94A5\u3002");
-  }
   const json = JSON.stringify(payload);
   const digest = CryptoJS.MD5("nobody" + path + "use" + json + "md5forencrypt").toString();
   const message = path + "-36cd479b6b5-" + json + "-36cd479b6b5-" + digest;
   const encrypted = CryptoJS.AES.encrypt(
     CryptoJS.enc.Utf8.parse(message),
-    CryptoJS.enc.Utf8.parse(key),
+    CryptoJS.enc.Utf8.parse(NETEASE_EAPI_KEY),
     { mode: CryptoJS.mode.ECB, padding: CryptoJS.pad.Pkcs7 }
   );
   return encrypted.ciphertext.toString(CryptoJS.enc.Hex).toUpperCase();
@@ -243,13 +239,17 @@ async function search(query, page, type) {
     type: 1,
     limit: PAGE_SIZE,
     offset: (currentPage - 1) * PAGE_SIZE,
-    total: true
+    total: currentPage === 1
   };
   const response = await axios.post(
     "http://interface.music.163.com/eapi/batch",
     "params=" + encodeURIComponent(encryptEapi(apiPath, payload)),
     {
-      headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": UA },
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Origin: "https://music.163.com",
+        "User-Agent": UA
+      },
       timeout: 8e3
     }
   );
@@ -397,19 +397,12 @@ async function importMusicSheet(urlLike) {
 }
 module.exports = {
   platform: "\u7F51\u6613\u4E91\u97F3\u4E50",
-  version: "1.3.0",
+  version: "1.3.1",
   srcUrl: "https://droidzf.github.io/musicfree/netease.js",
   author: "zero",
   description: "\u72EC\u7ACB\u7F51\u6613\u4E91\u97F3\u4E50\u63D2\u4EF6\uFF1A\u641C\u7D22\u3001\u64AD\u653E\u3001\u6B4C\u8BCD\u3001\u699C\u5355\u3001\u63A8\u8350\u6B4C\u5355\u3001\u5B8C\u6574\u6B4C\u5355\u8BE6\u60C5\u548C\u8BC4\u8BBA\u3002",
   cacheControl: "no-store",
   supportedSearchType: ["music"],
-  userVariables: [
-    {
-      key: "neteaseEapiKey",
-      name: "\u7F51\u6613\u4E91 EAPI AES Key",
-      hint: "\u4EC5\u7528\u4E8E\u641C\u7D22\u7B7E\u540D\uFF1B\u8BF7\u81EA\u884C\u586B\u5199\uFF0C\u63D2\u4EF6\u4E0D\u4F1A\u5185\u7F6E APK \u4E2D\u63D0\u53D6\u7684\u5BC6\u94A5\u3002"
-    }
-  ],
   hints: { importMusicSheet: ["\u652F\u6301\u7F51\u6613\u4E91\u6B4C\u5355\u94FE\u63A5\u6216\u7EAF\u6570\u5B57\u6B4C\u5355 ID\u3002"] },
   search,
   getMediaSource: function(musicItem, quality) {
