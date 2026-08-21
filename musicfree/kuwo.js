@@ -163,232 +163,48 @@ var {
   getComments,
   extractNumericId
 } = require_shared();
-var cheerio = require("cheerio");
-var KUWO_SECRET_COOKIE = "Hm_Iuvt_cdb524f42f23cer9b268564v7y735ewrq2324";
-function createKuwoSecret(token, key) {
-  let digits = "";
-  for (let index = 0; index < key.length; index += 1) {
-    digits += key.charCodeAt(index).toString();
-  }
-  const step = Math.floor(digits.length / 5);
-  const multiplier = parseInt(
-    digits.charAt(step) + digits.charAt(step * 2) + digits.charAt(step * 3) + digits.charAt(step * 4) + digits.charAt(step * 5),
-    10
-  );
-  const increment = Math.ceil(key.length / 2);
-  const modulus = Math.pow(2, 31) - 1;
-  let seed = Math.round(1e9 * Math.random()) % 1e8;
-  let mixed = digits + seed;
-  while (mixed.length > 10) {
-    mixed = (parseInt(mixed.substring(0, 10), 10) + parseInt(mixed.substring(10), 10)).toString();
-  }
-  let state = (multiplier * Number(mixed) + increment) % modulus;
-  let result = "";
-  for (let index = 0; index < token.length; index += 1) {
-    const value = token.charCodeAt(index) ^ Math.floor(state / modulus * 255);
-    result += (value < 16 ? "0" : "") + value.toString(16);
-    state = (multiplier * state + increment) % modulus;
-  }
-  let suffix = seed.toString(16);
-  while (suffix.length < 8) suffix = "0" + suffix;
-  return result + suffix;
-}
-function extractKuwoSession(response) {
-  const headers = response && response.headers || {};
-  const rawCookie = headers["set-cookie"] || headers["Set-Cookie"] || "";
-  const cookieText = Array.isArray(rawCookie) ? rawCookie.join(";") : text(rawCookie);
-  const match = new RegExp(KUWO_SECRET_COOKIE + "=([^;]+)", "i").exec(cookieText);
-  return match ? match[1] : "";
-}
-function createKuwoSessionToken() {
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let token = "";
-  for (let index = 0; index < 32; index += 1) {
-    token += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
-  }
-  return token;
-}
-function kuwoWebHeaders(token) {
-  return {
-    Secret: createKuwoSecret(token, KUWO_SECRET_COOKIE),
-    Cookie: KUWO_SECRET_COOKIE + "=" + token,
-    Referer: "https://www.kuwo.cn/playlists",
-    "User-Agent": UA
-  };
-}
-var playlistPageCache;
-var playlistPageCacheAt = 0;
-function createNuxtValueParser(source, variables) {
-  let index = 0;
-  function skipWhitespace() {
-    while (/\s/.test(source.charAt(index))) index += 1;
-  }
-  function parseString() {
-    const start = index;
-    index += 1;
-    while (index < source.length) {
-      if (source.charAt(index) === "\\") {
-        index += 2;
-        continue;
-      }
-      if (source.charAt(index) === '"') {
-        index += 1;
-        return JSON.parse(source.slice(start, index));
-      }
-      index += 1;
-    }
-    throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u5B57\u7B26\u4E32\u89E3\u6790\u5931\u8D25");
-  }
-  function parseIdentifier() {
-    const start = index;
-    while (/[A-Za-z0-9_$]/.test(source.charAt(index))) index += 1;
-    return source.slice(start, index);
-  }
-  function parseNumber() {
-    const start = index;
-    while (/[0-9eE+\-.]/.test(source.charAt(index))) index += 1;
-    const value = Number(source.slice(start, index));
-    if (!Number.isFinite(value)) throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u6570\u5B57\u89E3\u6790\u5931\u8D25");
-    return value;
-  }
-  function parseArray() {
-    const result = [];
-    index += 1;
-    skipWhitespace();
-    if (source.charAt(index) === "]") {
-      index += 1;
-      return result;
-    }
-    while (index < source.length) {
-      result.push(parseValue());
-      skipWhitespace();
-      if (source.charAt(index) === "]") {
-        index += 1;
-        return result;
-      }
-      if (source.charAt(index) !== ",") throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u6570\u7EC4\u89E3\u6790\u5931\u8D25");
-      index += 1;
-    }
-    throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u6570\u7EC4\u672A\u95ED\u5408");
-  }
-  function parseObject() {
-    const result = {};
-    index += 1;
-    skipWhitespace();
-    if (source.charAt(index) === "}") {
-      index += 1;
-      return result;
-    }
-    while (index < source.length) {
-      skipWhitespace();
-      const key = source.charAt(index) === '"' ? parseString() : parseIdentifier();
-      skipWhitespace();
-      if (!key || source.charAt(index) !== ":") {
-        throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u5BF9\u8C61\u89E3\u6790\u5931\u8D25");
-      }
-      index += 1;
-      result[key] = parseValue();
-      skipWhitespace();
-      if (source.charAt(index) === "}") {
-        index += 1;
-        return result;
-      }
-      if (source.charAt(index) !== ",") throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u5BF9\u8C61\u89E3\u6790\u5931\u8D25");
-      index += 1;
-    }
-    throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u5BF9\u8C61\u672A\u95ED\u5408");
-  }
-  function parseValue() {
-    skipWhitespace();
-    const current = source.charAt(index);
-    if (current === '"') return parseString();
-    if (current === "[") return parseArray();
-    if (current === "{") return parseObject();
-    if (current === "-" || /[0-9]/.test(current)) return parseNumber();
-    const identifier = parseIdentifier();
-    if (identifier === "true") return true;
-    if (identifier === "false") return false;
-    if (identifier === "null") return null;
-    if (Object.prototype.hasOwnProperty.call(variables, identifier)) {
-      return variables[identifier];
-    }
-    throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u5305\u542B\u672A\u77E5\u53D8\u91CF: " + identifier);
-  }
-  return function(start) {
-    index = start;
-    const value = parseValue();
-    return { value, end: index };
-  };
-}
-function parseKuwoPlaylistPage(rawHtml) {
-  const $ = cheerio.load(text(rawHtml));
-  let script = "";
-  $("script").each(function() {
-    const content = $(this).html() || "";
-    if (!script && content.indexOf("window.__NUXT__=") >= 0) script = content;
-  });
-  if (!script) throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u7F3A\u5C11\u5B98\u65B9\u6570\u636E");
-  const functionMatch = /window\.__NUXT__=\(function\(([^)]*)\)\{return\s*/.exec(script);
-  const invocationIndex = script.lastIndexOf("}(");
-  const argumentsEnd = script.lastIndexOf("));");
-  if (!functionMatch || invocationIndex < 0 || argumentsEnd <= invocationIndex) {
-    throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u683C\u5F0F\u5DF2\u53D8\u5316");
-  }
-  const parameterNames = functionMatch[1].split(",").filter(Boolean);
-  const argumentValues = JSON.parse(
-    "[" + script.slice(invocationIndex + 2, argumentsEnd) + "]"
-  );
-  const variables = {};
-  parameterNames.forEach(function(name, parameterIndex) {
-    variables[name] = argumentValues[parameterIndex];
-  });
-  const parseAt = createNuxtValueParser(script, variables);
-  const playListMarker = "playList:";
-  const playListIndex = script.indexOf(playListMarker, functionMatch.index);
-  if (playListIndex < 0) throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u7F3A\u5C11\u63A8\u8350\u5217\u8868");
-  const playListResult = parseAt(playListIndex + playListMarker.length);
-  const totalMarker = ",total:";
-  const totalIndex = script.indexOf(totalMarker, playListResult.end);
-  const totalResult = totalIndex < 0 ? { value: 0 } : parseAt(totalIndex + totalMarker.length);
-  const tagListMarker = "tagList:";
-  const tagListIndex = script.indexOf(tagListMarker, playListResult.end);
-  if (tagListIndex < 0) throw new Error("\u9177\u6211\u6B4C\u5355\u9875\u9762\u7F3A\u5C11\u5206\u7C7B\u6807\u7B7E");
-  const tagListResult = parseAt(tagListIndex + tagListMarker.length);
-  return {
-    playList: Array.isArray(playListResult.value) ? playListResult.value : [],
-    total: Number(totalResult.value) || 0,
-    tagList: Array.isArray(tagListResult.value) ? tagListResult.value : []
-  };
-}
-async function getKuwoPlaylistPageData() {
+var KUWO_PC_PRODUCT = "kwplayer_pc_9.0.5.0";
+var KUWO_APP_UID = "76039576";
+var recommendTagCache;
+var recommendTagCacheAt = 0;
+async function getKuwoRecommendTagGroups() {
   const now = Date.now();
-  if (playlistPageCache && now - playlistPageCacheAt < 5 * 60 * 1e3) {
-    return playlistPageCache;
+  if (recommendTagCache && now - recommendTagCacheAt < 5 * 60 * 1e3) {
+    return recommendTagCache;
   }
-  const response = await axios.get("https://www.kuwo.cn/playlists", {
-    headers: {
-      Accept: "text/html,application/xhtml+xml",
-      Referer: "https://www.kuwo.cn/",
-      "User-Agent": UA
-    },
-    responseType: "text",
-    timeout: 8e3
-  });
-  const parsed = parseKuwoPlaylistPage(response.data);
-  if (!parsed.playList.length || !parsed.tagList.length) {
-    throw new Error("\u9177\u6211\u5B98\u65B9\u63A8\u8350\u6B4C\u5355\u4E3A\u7A7A");
+  const response = await axios.get(
+    "https://wapi.kuwo.cn/api/pc/classify/playlist/getTagList",
+    {
+      params: {
+        cmd: "rcm_keyword_playlist",
+        user: 0,
+        prod: KUWO_PC_PRODUCT,
+        vipver: KUWO_PC_PRODUCT,
+        source: KUWO_PC_PRODUCT,
+        loginUid: 0,
+        loginSid: 0,
+        appUid: KUWO_APP_UID
+      },
+      headers: { "User-Agent": UA },
+      timeout: 8e3
+    }
+  );
+  const groups = response.data && response.data.data;
+  if (!Array.isArray(groups) || !groups.some(function(group) {
+    return Array.isArray(group.data) && group.data.length > 0;
+  })) {
+    throw new Error("\u9177\u6211\u5B98\u65B9\u6B4C\u5355\u5206\u7C7B\u4E3A\u7A7A");
   }
-  parsed.sessionToken = extractKuwoSession(response) || createKuwoSessionToken();
-  playlistPageCache = parsed;
-  playlistPageCacheAt = now;
-  return parsed;
+  recommendTagCache = groups;
+  recommendTagCacheAt = now;
+  return groups;
 }
 function mapRecommendSheet(item) {
   return {
     id: text(item.id),
     title: text(item.name),
     artist: text(item.uname),
-    artwork: toHttps(item.img),
+    artwork: toHttps(item.pc_new_focus || item.img),
     description: text(item.desc || item.info),
     worksNum: Number(item.total) || void 0,
     playCount: Number(item.listencnt) || void 0
@@ -516,22 +332,47 @@ async function getTopListDetail(topListItem, page) {
 }
 async function getRecommendSheetsByTag(tag, page) {
   const currentPage = Math.max(1, Number(page) || 1);
-  const tagId = text(tag && tag.id, "__recommend__");
-  if (tagId === "__recommend__" && currentPage === 1) {
-    const officialPage2 = await getKuwoPlaylistPageData();
+  const tagId = text(tag && tag.id);
+  const digest = text(tag && tag.digest);
+  const isRecommend = !tagId || tagId === "__recommend__";
+  if (!isRecommend && digest === "43") {
+    const response2 = await axios.get("https://mobileinterfaces.kuwo.cn/er.s", {
+      params: { type: "get_pc_qz_data", f: "web", id: tagId, prod: "pc" },
+      headers: { "User-Agent": UA },
+      timeout: 8e3
+    });
+    const groups = Array.isArray(response2.data) ? response2.data : [];
+    const seen = /* @__PURE__ */ new Set();
+    const allSheets = [];
+    groups.forEach(function(group) {
+      const list2 = Array.isArray(group.list) ? group.list : [];
+      list2.forEach(function(item) {
+        const id = text(item.id);
+        if (!id || seen.has(id) || item.type && item.type !== "songlist") return;
+        seen.add(id);
+        allSheets.push(item);
+      });
+    });
+    const start = (currentPage - 1) * 20;
+    const pageSheets = allSheets.slice(start, start + 20);
     return {
-      isEnd: officialPage2.playList.length < 20 || officialPage2.playList.length >= officialPage2.total,
-      data: officialPage2.playList.map(mapRecommendSheet)
+      isEnd: start + pageSheets.length >= allSheets.length,
+      data: pageSheets.map(mapRecommendSheet)
     };
   }
-  const officialPage = await getKuwoPlaylistPageData();
-  const endpoint = tagId === "__recommend__" ? "https://www.kuwo.cn/api/www/classify/playlist/getRcmPlayList" : "https://www.kuwo.cn/api/www/classify/playlist/getTagPlayList";
-  const params = { pn: currentPage, rn: 20, httpsStatus: 1, plat: "web_www" };
-  if (tagId === "__recommend__") params.order = "new";
+  const endpoint = isRecommend ? "https://wapi.kuwo.cn/api/pc/classify/playlist/getRcmPlayList" : "https://wapi.kuwo.cn/api/pc/classify/playlist/getTagPlayList";
+  const params = {
+    loginUid: 0,
+    loginSid: 0,
+    appUid: KUWO_APP_UID,
+    pn: currentPage - 1,
+    rn: 20
+  };
+  if (isRecommend) params.order = "hot";
   else params.id = tagId;
   const response = await axios.get(endpoint, {
     params,
-    headers: kuwoWebHeaders(officialPage.sessionToken),
+    headers: { "User-Agent": UA },
     timeout: 8e3
   });
   const data = response.data && response.data.data || {};
@@ -577,8 +418,7 @@ async function getMusicSheetInfo(sheetItem, page) {
   return result;
 }
 async function getRecommendSheetTags() {
-  const officialPage = await getKuwoPlaylistPageData();
-  const groups = officialPage.tagList;
+  const groups = await getKuwoRecommendTagGroups();
   return {
     pinned: [{ id: "__recommend__", title: "\u7CBE\u9009\u6B4C\u5355" }],
     data: groups.filter(function(group) {
@@ -587,7 +427,11 @@ async function getRecommendSheetTags() {
       return {
         title: text(group.name),
         data: group.data.map(function(item) {
-          return { id: text(item.id), title: text(item.name) };
+          return {
+            id: text(item.id),
+            title: text(item.name),
+            digest: text(item.digest)
+          };
         })
       };
     })
@@ -599,7 +443,7 @@ async function importMusicSheet(urlLike) {
 }
 module.exports = {
   platform: "\u9177\u6211\u97F3\u4E50",
-  version: "1.3.2",
+  version: "1.3.3",
   srcUrl: "https://droidzf.github.io/musicfree/kuwo.js",
   author: "zero",
   description: "\u72EC\u7ACB\u9177\u6211\u97F3\u4E50\u63D2\u4EF6\uFF1A\u641C\u7D22\u3001\u64AD\u653E\u3001\u6B4C\u8BCD\u3001\u699C\u5355\u3001\u63A8\u8350\u6B4C\u5355\u3001\u6B4C\u5355\u8BE6\u60C5\u548C\u8BC4\u8BBA\u3002",
